@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { supabase, isSupabaseConfigured } from "@/lib/supabase"
+import { api } from "@/lib/api"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -11,13 +11,13 @@ import {
 } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Leaf, Loader2, Info } from "lucide-react"
+import { Leaf, Loader2, Database } from "lucide-react"
 
 export default function Login() {
   const navigate = useNavigate()
 
-  const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
+  const [email, setEmail] = useState("admin@farm.com")
+  const [password, setPassword] = useState("admin123")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
 
@@ -27,76 +27,55 @@ export default function Login() {
     setError("")
     setLoading(true)
 
-    if (!isSupabaseConfigured) {
-      // Prototyping mode: instant local authentication
-      setTimeout(() => {
-        setLoading(false)
-        if (
-          (email.trim().toLowerCase() === "admin@farm.com" && password === "admin123") ||
-          (email.trim().length > 0 && password.length >= 6)
-        ) {
-          navigate("/dashboard")
-        } else {
-          setError("Prototyping credentials: use admin@farm.com and admin123 (or password of 6+ chars)")
-        }
-      }, 500)
-      return
+    try {
+      await api.login(email, password)
+      navigate("/dashboard")
+    } catch (err: any) {
+      setError(err?.message || "Invalid credentials. Use admin@farm.com / admin123")
+    } finally {
+      setLoading(false)
     }
-
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    })
-
-    setLoading(false)
-
-    if (error) {
-      setError(error.message)
-      return
-    }
-
-    navigate("/dashboard")
   }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-6">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-green-100">
-            <Leaf className="h-7 w-7 text-green-700" />
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100">
+            <Leaf className="h-7 w-7 text-emerald-700" />
           </div>
 
-          <CardTitle className="text-2xl">
+          <CardTitle className="text-2xl font-bold tracking-tight text-foreground">
             Agricultural Farm Management System
           </CardTitle>
 
           <CardDescription>
-            Sign in to manage farm operations
+            Local SQLite Edition
           </CardDescription>
         </CardHeader>
 
         <CardContent>
-          {!isSupabaseConfigured && (
-            <div className="mb-5 flex items-start gap-2.5 rounded-lg border border-emerald-200 bg-emerald-50/80 p-3 text-sm text-emerald-900">
-              <Info className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
-              <div>
-                <p className="font-medium">Quick Prototyping Mode</p>
-                <p className="text-xs text-emerald-700 mt-0.5">
-                  Email: <code className="font-semibold text-emerald-900">admin@farm.com</code>
-                  <br />
-                  Password: <code className="font-semibold text-emerald-900">admin123</code>
-                </p>
-              </div>
+          <div className="mb-5 flex items-start gap-2.5 rounded-lg border border-emerald-200 bg-emerald-50/80 p-3 text-sm text-emerald-900">
+            <Database className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+            <div>
+              <p className="font-medium">Local SQLite Database Active</p>
+              <p className="text-xs text-emerald-700 mt-1">
+                Default Credentials:
+                <br />
+                Email: <code className="font-semibold text-emerald-900">admin@farm.com</code>
+                <br />
+                Password: <code className="font-semibold text-emerald-900">admin123</code>
+              </p>
             </div>
-          )}
+          </div>
 
           <form onSubmit={handleLogin} className="space-y-5">
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email">Email Address</Label>
               <Input
                 id="email"
                 type="email"
-                placeholder="Enter your email"
+                placeholder="admin@farm.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -108,7 +87,7 @@ export default function Login() {
               <Input
                 id="password"
                 type="password"
-                placeholder="Enter your password"
+                placeholder="admin123"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
@@ -121,9 +100,13 @@ export default function Login() {
               </div>
             )}
 
-            <Button type="submit" className="w-full" disabled={loading}>
+            <Button
+              type="submit"
+              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
+              disabled={loading}
+            >
               {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {loading ? "Signing in..." : "Sign In"}
+              {loading ? "Signing in..." : "Sign In to Farm System"}
             </Button>
           </form>
         </CardContent>
