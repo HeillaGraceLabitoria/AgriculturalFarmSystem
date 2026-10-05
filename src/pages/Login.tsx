@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { supabase } from "@/lib/supabase"
+import { supabase, isSupabaseConfigured } from "@/lib/supabase"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Leaf, Loader2 } from "lucide-react"
+import { Leaf, Loader2, Info } from "lucide-react"
 
 export default function Login() {
   const navigate = useNavigate()
@@ -26,6 +26,22 @@ export default function Login() {
 
     setError("")
     setLoading(true)
+
+    if (!isSupabaseConfigured) {
+      // Prototyping mode: instant local authentication
+      setTimeout(() => {
+        setLoading(false)
+        if (
+          (email.trim().toLowerCase() === "admin@farm.com" && password === "admin123") ||
+          (email.trim().length > 0 && password.length >= 6)
+        ) {
+          navigate("/dashboard")
+        } else {
+          setError("Prototyping credentials: use admin@farm.com and admin123 (or password of 6+ chars)")
+        }
+      }, 500)
+      return
+    }
 
     const { error } = await supabase.auth.signInWithPassword({
       email,
@@ -60,6 +76,20 @@ export default function Login() {
         </CardHeader>
 
         <CardContent>
+          {!isSupabaseConfigured && (
+            <div className="mb-5 flex items-start gap-2.5 rounded-lg border border-emerald-200 bg-emerald-50/80 p-3 text-sm text-emerald-900">
+              <Info className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+              <div>
+                <p className="font-medium">Quick Prototyping Mode</p>
+                <p className="text-xs text-emerald-700 mt-0.5">
+                  Email: <code className="font-semibold text-emerald-900">admin@farm.com</code>
+                  <br />
+                  Password: <code className="font-semibold text-emerald-900">admin123</code>
+                </p>
+              </div>
+            </div>
+          )}
+
           <form onSubmit={handleLogin} className="space-y-5">
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
