@@ -7,9 +7,23 @@ export interface User {
 
 export interface Stats {
   totalFarms: number
+  totalFields?: number
   activeCrops: number
   harvestedQuantity: number
   totalSales: number
+}
+
+export type FieldStatus = "Active" | "Planted" | "Prepared" | "Fallow" | "Under Maintenance"
+
+export interface FarmField {
+  id: number
+  farm_id: number
+  farm_name?: string
+  name: string
+  area: number
+  description?: string
+  status: FieldStatus
+  created_at?: string
 }
 
 export interface Farm {
@@ -17,7 +31,13 @@ export interface Farm {
   name: string
   location: string
   size_hectares: number
+  total_area?: number
+  description?: string
+  field_count?: number
+  cultivated_area?: number
   crop_count?: number
+  fields?: FarmField[]
+  crops?: Crop[]
   created_at?: string
 }
 
@@ -60,21 +80,6 @@ export interface Sale {
 
 const API_BASE = import.meta.env.VITE_API_URL || "/api"
 
-// Default seed data for offline / static fallback
-const fallbackStats: Stats = {
-  totalFarms: 4,
-  activeCrops: 10,
-  harvestedQuantity: 18450,
-  totalSales: 485250,
-}
-
-const fallbackFarms: Farm[] = [
-  { id: 1, name: "Green Valley Agri Farm", location: "Laguna, Region IV-A", size_hectares: 15.5, crop_count: 3 },
-  { id: 2, name: "Sunrise Plains Farm", location: "Nueva Ecija, Central Luzon", size_hectares: 28.0, crop_count: 3 },
-  { id: 3, name: "Highland Organic Fields", location: "Benguet, CAR", size_hectares: 8.2, crop_count: 3 },
-  { id: 4, name: "Mindanao Citrus & Palm", location: "Davao del Norte, Region XI", size_hectares: 35.0, crop_count: 3 },
-]
-
 export const api = {
   async login(email: string, password: string): Promise<{ user: User; token: string }> {
     try {
@@ -94,7 +99,6 @@ export const api = {
       localStorage.setItem("farm_token", data.token)
       return data
     } catch (err: any) {
-      // Offline fallback: verify admin credentials
       if (email.trim().toLowerCase() === "admin@farm.com" && password === "admin123") {
         const user: User = {
           id: 1,
@@ -121,32 +125,46 @@ export const api = {
   },
 
   async getStats(): Promise<Stats> {
-    try {
-      const res = await fetch(`${API_BASE}/stats`)
-      if (res.ok) return await res.json()
-    } catch {
-      // Fallback
-    }
-    return fallbackStats
+    const res = await fetch(`${API_BASE}/stats`)
+    if (!res.ok) throw new Error("Failed to fetch stats")
+    return await res.json()
   },
 
   async getFarms(): Promise<Farm[]> {
-    try {
-      const res = await fetch(`${API_BASE}/farms`)
-      if (res.ok) return await res.json()
-    } catch {
-      // Fallback
-    }
-    return fallbackFarms
+    const res = await fetch(`${API_BASE}/farms`)
+    if (!res.ok) throw new Error("Failed to fetch farms")
+    return await res.json()
   },
 
-  async createFarm(farm: Omit<Farm, "id" | "created_at" | "crop_count">): Promise<Farm> {
+  async getFarm(id: number): Promise<Farm> {
+    const res = await fetch(`${API_BASE}/farms/${id}`)
+    if (!res.ok) throw new Error("Failed to fetch farm details")
+    return await res.json()
+  },
+
+  async createFarm(farm: { name: string; location: string; total_area?: number; size_hectares?: number; description?: string }): Promise<Farm> {
     const res = await fetch(`${API_BASE}/farms`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(farm),
     })
-    if (!res.ok) throw new Error("Failed to create farm")
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err.error || "Failed to create farm")
+    }
+    return await res.json()
+  },
+
+  async updateFarm(id: number, farm: { name: string; location: string; total_area?: number; size_hectares?: number; description?: string }): Promise<Farm> {
+    const res = await fetch(`${API_BASE}/farms/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(farm),
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err.error || "Failed to update farm")
+    }
     return await res.json()
   },
 
@@ -155,33 +173,65 @@ export const api = {
     if (!res.ok) throw new Error("Failed to delete farm")
   },
 
-  async getCrops(): Promise<Crop[]> {
-    try {
-      const res = await fetch(`${API_BASE}/crops`)
-      if (res.ok) return await res.json()
-    } catch {
-      // Fallback
+  async getFarmFields(farmId: number): Promise<FarmField[]> {
+    const res = await fetch(`${API_BASE}/farms/${farmId}/fields`)
+    if (!res.ok) throw new Error("Failed to fetch fields for farm")
+    return await res.json()
+  },
+
+  async getAllFields(farmId?: number): Promise<FarmField[]> {
+    const url = farmId ? `${API_BASE}/fields?farm_id=${farmId}` : `${API_BASE}/fields`
+    const res = await fetch(url)
+    if (!res.ok) throw new Error("Failed to fetch fields")
+    return await res.json()
+  },
+
+  async createField(field: { farm_id: number; name: string; area: number; description?: string; status?: FieldStatus }): Promise<FarmField> {
+    const res = await fetch(`${API_BASE}/fields`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(field),
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err.error || "Failed to create field")
     }
-    return []
+    return await res.json()
+  },
+
+  async updateField(id: number, field: { name: string; area: number; description?: string; status?: FieldStatus }): Promise<FarmField> {
+    const res = await fetch(`${API_BASE}/fields/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(field),
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err.error || "Failed to update field")
+    }
+    return await res.json()
+  },
+
+  async deleteField(id: number): Promise<void> {
+    const res = await fetch(`${API_BASE}/fields/${id}`, { method: "DELETE" })
+    if (!res.ok) throw new Error("Failed to delete field")
+  },
+
+  async getCrops(): Promise<Crop[]> {
+    const res = await fetch(`${API_BASE}/crops`)
+    if (!res.ok) throw new Error("Failed to fetch crops")
+    return await res.json()
   },
 
   async getHarvests(): Promise<Harvest[]> {
-    try {
-      const res = await fetch(`${API_BASE}/harvests`)
-      if (res.ok) return await res.json()
-    } catch {
-      // Fallback
-    }
-    return []
+    const res = await fetch(`${API_BASE}/harvests`)
+    if (!res.ok) throw new Error("Failed to fetch harvests")
+    return await res.json()
   },
 
   async getSales(): Promise<Sale[]> {
-    try {
-      const res = await fetch(`${API_BASE}/sales`)
-      if (res.ok) return await res.json()
-    } catch {
-      // Fallback
-    }
-    return []
+    const res = await fetch(`${API_BASE}/sales`)
+    if (!res.ok) throw new Error("Failed to fetch sales")
+    return await res.json()
   },
 }

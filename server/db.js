@@ -27,6 +27,17 @@ export function initDatabase() {
       name TEXT NOT NULL,
       location TEXT NOT NULL,
       size_hectares REAL NOT NULL,
+      description TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS farm_fields (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      farm_id INTEGER NOT NULL REFERENCES farms(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      area REAL NOT NULL,
+      description TEXT,
+      status TEXT NOT NULL DEFAULT 'Active',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
@@ -67,6 +78,22 @@ export function initDatabase() {
     );
   `)
 
+  // Ensure 'description' column exists in 'farms' table for existing databases
+  const farmCols = db.prepare("PRAGMA table_info(farms)").all()
+  if (!farmCols.some((c) => c.name === "description")) {
+    db.exec("ALTER TABLE farms ADD COLUMN description TEXT")
+  }
+
+  // Populate default farm descriptions if missing
+  try {
+    db.prepare("UPDATE farms SET description = ? WHERE name LIKE '%Green Valley%' AND (description IS NULL OR description = '')").run("Primary grain and vegetable research farm situated along the Laguna lake basin.")
+    db.prepare("UPDATE farms SET description = ? WHERE name LIKE '%Sunrise Plains%' AND (description IS NULL OR description = '')").run("Large-scale mechanized grain production facility in Central Luzon.")
+    db.prepare("UPDATE farms SET description = ? WHERE name LIKE '%Highland Organic%' AND (description IS NULL OR description = '')").run("Eco-certified cool climate vegetable farm in the Cordillera mountain range.")
+    db.prepare("UPDATE farms SET description = ? WHERE name LIKE '%Mindanao Citrus%' AND (description IS NULL OR description = '')").run("Export-grade tropical fruit plantation and agro-forestry development.")
+  } catch {
+    // Non-blocking
+  }
+
   // Check if initial user exists
   const userCount = db.prepare("SELECT COUNT(*) as count FROM users").get().count
   if (userCount === 0) {
@@ -76,14 +103,14 @@ export function initDatabase() {
     `).run("Farm Administrator", "admin@farm.com", "admin123", "admin")
   }
 
-  // Check if farms exist
+  // Check if farms exist (if 0, seed defaults)
   const farmCount = db.prepare("SELECT COUNT(*) as count FROM farms").get().count
   if (farmCount === 0) {
-    const insertFarm = db.prepare("INSERT INTO farms (name, location, size_hectares) VALUES (?, ?, ?)")
-    insertFarm.run("Green Valley Agri Farm", "Laguna, Region IV-A", 15.5)
-    insertFarm.run("Sunrise Plains Farm", "Nueva Ecija, Central Luzon", 28.0)
-    insertFarm.run("Highland Organic Fields", "Benguet, CAR", 8.2)
-    insertFarm.run("Mindanao Citrus & Palm", "Davao del Norte, Region XI", 35.0)
+    const insertFarm = db.prepare("INSERT INTO farms (name, location, size_hectares, description) VALUES (?, ?, ?, ?)")
+    insertFarm.run("Green Valley Agri Farm", "Laguna, Region IV-A", 15.5, "Primary grain and vegetable research farm situated along the Laguna lake basin.")
+    insertFarm.run("Sunrise Plains Farm", "Nueva Ecija, Central Luzon", 28.0, "Large-scale mechanized grain production facility in Central Luzon.")
+    insertFarm.run("Highland Organic Fields", "Benguet, CAR", 8.2, "Eco-certified cool climate vegetable farm in the Cordillera mountain range.")
+    insertFarm.run("Mindanao Citrus & Palm", "Davao del Norte, Region XI", 35.0, "Export-grade tropical fruit plantation and agro-forestry development.")
 
     const insertCrop = db.prepare(`
       INSERT INTO crops (farm_id, name, variety, planted_date, expected_harvest_date, status, area_hectares)
@@ -116,5 +143,35 @@ export function initDatabase() {
     insertSale.run("Rice (NSIC Rc160)", "National Food Authority / Regional Grain Trading", "2026-10-02", 12500, 24.50, 306250.00, "paid")
     insertSale.run("Banana (Cavendish)", "Davao Fresh Produce Trading Corp", "2026-10-03", 5950, 30.00, 178500.00, "paid")
     insertSale.run("Organic Vegetables Sample", "Benguet Agri-Hub Coop", "2026-10-04", 50, 10.00, 500.00, "paid")
+  }
+
+  // Seed default fields if farm_fields is empty
+  const fieldCount = db.prepare("SELECT COUNT(*) as count FROM farm_fields").get().count
+  if (fieldCount === 0) {
+    const insertField = db.prepare(`
+      INSERT INTO farm_fields (farm_id, name, area, description, status)
+      VALUES (?, ?, ?, ?, ?)
+    `)
+
+    const greenValley = db.prepare("SELECT id FROM farms WHERE name LIKE '%Green Valley%'").get()
+    if (greenValley) {
+      insertField.run(greenValley.id, "North Paddy Field A", 5.0, "Lowland irrigated rice field with automated sluice gates", "Planted")
+      insertField.run(greenValley.id, "East Terrace Field B", 4.5, "Fertile terrace soil planted with hybrid corn", "Active")
+      insertField.run(greenValley.id, "Greenhouse Zone C", 2.0, "High-density tunnel greenhouses for organic tomatoes", "Active")
+    }
+
+    const sunrise = db.prepare("SELECT id FROM farms WHERE name LIKE '%Sunrise Plains%'").get()
+    if (sunrise) {
+      insertField.run(sunrise.id, "Central Basin Field 1", 12.0, "Deep alluvial soil block for grain cultivation", "Fallow")
+      insertField.run(sunrise.id, "Sector 2 West", 8.0, "Sandy loam soil optimized for corn varieties", "Planted")
+      insertField.run(sunrise.id, "Canal Plot 3", 6.0, "Direct canal access for high-demand sugarcane", "Active")
+    }
+
+    const highland = db.prepare("SELECT id FROM farms WHERE name LIKE '%Highland Organic%'").get()
+    if (highland) {
+      insertField.run(highland.id, "Terrace Slope Alpha", 2.5, "High-altitude terraced beds for crisp cabbage", "Planted")
+      insertField.run(highland.id, "Root Crop Zone", 2.2, "Rich volcanic soil plot for organic carrots", "Active")
+      insertField.run(highland.id, "Covered Garden 1", 1.8, "UV-filtered polyhouse for bell peppers", "Prepared")
+    }
   }
 }

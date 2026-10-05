@@ -70,12 +70,14 @@ export async function handleApiRequest(req, res) {
   // 2. Stats: GET /api/stats
   if (pathname === "/api/stats" && method === "GET") {
     const totalFarms = db.prepare("SELECT COUNT(*) as count FROM farms").get().count
+    const totalFields = db.prepare("SELECT COUNT(*) as count FROM farm_fields").get().count
     const activeCrops = db.prepare("SELECT COUNT(*) as count FROM crops WHERE status = 'growing'").get().count
     const harvestTotal = db.prepare("SELECT COALESCE(SUM(quantity_kg), 0) as total FROM harvests").get().total
     const salesTotal = db.prepare("SELECT COALESCE(SUM(total_amount), 0) as total FROM sales").get().total
 
     sendJson(res, 200, {
       totalFarms,
+      totalFields,
       activeCrops,
       harvestedQuantity: harvestTotal,
       totalSales: salesTotal,
@@ -83,10 +85,97 @@ export async function handleApiRequest(req, res) {
     return true
   }
 
-  // 3. Farms: GET /api/farms, POST /api/farms, DELETE /api/farms/:id
+  // 3. Farms: Detail, Sub-fields, and CRUD
+  // GET /api/farms/:id/fields
+  const farmFieldsMatch = pathname.match(/^\/api\/farms\/(\d+)\/fields$/)
+  if (farmFieldsMatch && method === "GET") {
+    const farmId = Number(farmFieldsMatch[1])
+    const fields = db.prepare(`
+      SELECT ff.*, f.name as farm_name 
+      FROM farm_fields ff 
+      JOIN farms f ON ff.farm_id = f.id 
+      WHERE ff.farm_id = ? 
+      ORDER BY ff.id DESC
+    `).all(farmId)
+    sendJson(res, 200, fields)
+    return true
+  }
+
+  // GET /api/farms/:id
+  const farmDetailMatch = pathname.match(/^\/api\/farms\/(\d+)$/)
+  if (farmDetailMatch && method === "GET") {
+    const farmId = Number(farmDetailMatch[1])
+    const farm = db.prepare(`
+      SELECT f.*, 
+        f.size_hectares as total_area,
+        (SELECT COUNT(*) FROM farm_fields ff WHERE ff.farm_id = f.id) as field_count,
+        (SELECT COALESCE(SUM(ff.area), 0) FROM farm_fields ff WHERE ff.farm_id = f.id) as cultivated_area,
+        (SELECT COUNT(*) FROM crops c WHERE c.farm_id = f.id) as crop_count 
+      FROM farms f 
+      WHERE f.id = ?
+    `).get(farmId)
+
+    if (!farm) {
+      sendJson(res, 404, { error: "Farm not found" })
+      return true
+    }
+
+    const fields = db.prepare("SELECT * FROM farm_fields WHERE farm_id = ? ORDER BY id DESC").all(farmId)
+    const crops = db.prepare("SELECT * FROM crops WHERE farm_id = ? ORDER BY id DESC").all(farmId)
+
+    sendJson(res, 200, { ...farm, fields, crops })
+    return true
+  }
+
+  // PUT /api/farms/:id
+  if (farmDetailMatch && method === "PUT") {
+    const farmId = Number(farmDetailMatch[1])
+    const { name, location, size_hectares, total_area, description } = await parseJsonBody(req)
+
+    const area = Number(total_area ?? size_hectares) || 0
+    if (!name || !location) {
+      sendJson(res, 400, { error: "Farm name and location are required" })
+      return true
+    }
+
+    db.prepare(`
+      UPDATE farms 
+      SET name = ?, location = ?, size_hectares = ?, description = ? 
+      WHERE id = ?
+    `).run(name.trim(), location.trim(), area, description ? description.trim() : null, farmId)
+
+    const updatedFarm = db.prepare(`
+      SELECT f.*, 
+        f.size_hectares as total_area,
+        (SELECT COUNT(*) FROM farm_fields ff WHERE ff.farm_id = f.id) as field_count,
+        (SELECT COALESCE(SUM(ff.area), 0) FROM farm_fields ff WHERE ff.farm_id = f.id) as cultivated_area,
+        (SELECT COUNT(*) FROM crops c WHERE c.farm_id = f.id) as crop_count 
+      FROM farms f 
+      WHERE f.id = ?
+    `).get(farmId)
+
+    sendJson(res, 200, updatedFarm)
+    return true
+  }
+
+  // DELETE /api/farms/:id
+  if (farmDetailMatch && method === "DELETE") {
+    const farmId = Number(farmDetailMatch[1])
+    db.prepare("DELETE FROM farm_fields WHERE farm_id = ?").run(farmId)
+    db.prepare("DELETE FROM crops WHERE farm_id = ?").run(farmId)
+    db.prepare("DELETE FROM farms WHERE id = ?").run(farmId)
+    sendJson(res, 200, { success: true })
+    return true
+  }
+
+  // GET /api/farms
   if (pathname === "/api/farms" && method === "GET") {
     const farms = db.prepare(`
-      SELECT f.*, (SELECT COUNT(*) FROM crops c WHERE c.farm_id = f.id) as crop_count 
+      SELECT f.*, 
+        f.size_hectares as total_area,
+        (SELECT COUNT(*) FROM farm_fields ff WHERE ff.farm_id = f.id) as field_count,
+        (SELECT COALESCE(SUM(ff.area), 0) FROM farm_fields ff WHERE ff.farm_id = f.id) as cultivated_area,
+        (SELECT COUNT(*) FROM crops c WHERE c.farm_id = f.id) as crop_count 
       FROM farms f 
       ORDER BY f.id DESC
     `).all()
@@ -94,29 +183,141 @@ export async function handleApiRequest(req, res) {
     return true
   }
 
+  // POST /api/farms
   if (pathname === "/api/farms" && method === "POST") {
-    const { name, location, size_hectares } = await parseJsonBody(req)
+    const { name, location, size_hectares, total_area, description } = await parseJsonBody(req)
     if (!name || !location) {
-      sendJson(res, 400, { error: "Name and location are required" })
+      sendJson(res, 400, { error: "Farm name and location are required" })
       return true
     }
+    const area = Number(total_area ?? size_hectares) || 0
     const result = db.prepare(`
-      INSERT INTO farms (name, location, size_hectares) VALUES (?, ?, ?)
-    `).run(name, location, Number(size_hectares) || 0)
+      INSERT INTO farms (name, location, size_hectares, description) VALUES (?, ?, ?, ?)
+    `).run(name.trim(), location.trim(), area, description ? description.trim() : null)
 
-    const newFarm = db.prepare("SELECT * FROM farms WHERE id = ?").get(result.lastInsertRowid)
+    const newFarm = db.prepare(`
+      SELECT f.*, 
+        f.size_hectares as total_area,
+        0 as field_count,
+        0 as cultivated_area,
+        0 as crop_count 
+      FROM farms f 
+      WHERE f.id = ?
+    `).get(result.lastInsertRowid)
+
     sendJson(res, 201, newFarm)
     return true
   }
 
-  if (pathname.startsWith("/api/farms/") && method === "DELETE") {
-    const id = pathname.split("/").pop()
-    db.prepare("DELETE FROM farms WHERE id = ?").run(Number(id))
+  // 4. Farm Areas / Fields: CRUD
+  const fieldDetailMatch = pathname.match(/^\/api\/fields\/(\d+)$/)
+
+  // GET /api/fields
+  if (pathname === "/api/fields" && method === "GET") {
+    const farmIdQuery = url.searchParams.get("farm_id")
+    let fields
+    if (farmIdQuery) {
+      fields = db.prepare(`
+        SELECT ff.*, f.name as farm_name 
+        FROM farm_fields ff 
+        JOIN farms f ON ff.farm_id = f.id 
+        WHERE ff.farm_id = ? 
+        ORDER BY ff.id DESC
+      `).all(Number(farmIdQuery))
+    } else {
+      fields = db.prepare(`
+        SELECT ff.*, f.name as farm_name 
+        FROM farm_fields ff 
+        JOIN farms f ON ff.farm_id = f.id 
+        ORDER BY ff.id DESC
+      `).all()
+    }
+    sendJson(res, 200, fields)
+    return true
+  }
+
+  // POST /api/fields
+  if (pathname === "/api/fields" && method === "POST") {
+    const { farm_id, name, area, description, status } = await parseJsonBody(req)
+    if (!farm_id) {
+      sendJson(res, 400, { error: "Field must belong to an existing farm (farm_id is required)" })
+      return true
+    }
+    if (!name || name.trim() === "") {
+      sendJson(res, 400, { error: "Field name is required" })
+      return true
+    }
+
+    const farmExists = db.prepare("SELECT id FROM farms WHERE id = ?").get(Number(farm_id))
+    if (!farmExists) {
+      sendJson(res, 404, { error: "Selected farm does not exist" })
+      return true
+    }
+
+    const result = db.prepare(`
+      INSERT INTO farm_fields (farm_id, name, area, description, status)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(
+      Number(farm_id),
+      name.trim(),
+      Number(area) || 0,
+      description ? description.trim() : null,
+      status || "Active"
+    )
+
+    const newField = db.prepare(`
+      SELECT ff.*, f.name as farm_name 
+      FROM farm_fields ff 
+      JOIN farms f ON ff.farm_id = f.id 
+      WHERE ff.id = ?
+    `).get(result.lastInsertRowid)
+
+    sendJson(res, 201, newField)
+    return true
+  }
+
+  // PUT /api/fields/:id
+  if (fieldDetailMatch && method === "PUT") {
+    const fieldId = Number(fieldDetailMatch[1])
+    const { farm_id, name, area, description, status } = await parseJsonBody(req)
+
+    if (!name || name.trim() === "") {
+      sendJson(res, 400, { error: "Field name is required" })
+      return true
+    }
+
+    db.prepare(`
+      UPDATE farm_fields 
+      SET name = ?, area = ?, description = ?, status = ?
+      WHERE id = ?
+    `).run(
+      name.trim(),
+      Number(area) || 0,
+      description ? description.trim() : null,
+      status || "Active",
+      fieldId
+    )
+
+    const updatedField = db.prepare(`
+      SELECT ff.*, f.name as farm_name 
+      FROM farm_fields ff 
+      JOIN farms f ON ff.farm_id = f.id 
+      WHERE ff.id = ?
+    `).get(fieldId)
+
+    sendJson(res, 200, updatedField)
+    return true
+  }
+
+  // DELETE /api/fields/:id
+  if (fieldDetailMatch && method === "DELETE") {
+    const fieldId = Number(fieldDetailMatch[1])
+    db.prepare("DELETE FROM farm_fields WHERE id = ?").run(fieldId)
     sendJson(res, 200, { success: true })
     return true
   }
 
-  // 4. Crops: GET /api/crops, POST /api/crops
+  // 5. Crops: GET /api/crops, POST /api/crops
   if (pathname === "/api/crops" && method === "GET") {
     const crops = db.prepare(`
       SELECT c.*, f.name as farm_name 
@@ -151,7 +352,7 @@ export async function handleApiRequest(req, res) {
     return true
   }
 
-  // 5. Harvests: GET /api/harvests, POST /api/harvests
+  // 6. Harvests: GET /api/harvests, POST /api/harvests
   if (pathname === "/api/harvests" && method === "GET") {
     const harvests = db.prepare("SELECT * FROM harvests ORDER BY harvest_date DESC").all()
     sendJson(res, 200, harvests)
@@ -181,7 +382,7 @@ export async function handleApiRequest(req, res) {
     return true
   }
 
-  // 6. Sales: GET /api/sales, POST /api/sales
+  // 7. Sales: GET /api/sales, POST /api/sales
   if (pathname === "/api/sales" && method === "GET") {
     const sales = db.prepare("SELECT * FROM sales ORDER BY sale_date DESC").all()
     sendJson(res, 200, sales)

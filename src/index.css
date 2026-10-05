@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@600;700&display=swap');
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
@@ -5,26 +6,119 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --background: oklch(0.98 0.01 145);
-  --foreground: oklch(0.20 0.02 145);
+  /* Agricultural Farm System 8-Color Palette */
+  /* 1. Main Green (Primary Brand): Forest Flora (#2D5A27) */
+  --primary: #2D5A27;
+  --primary-foreground: #F9FBF7;
+
+  /* 2. Sage Green (Secondary / Supporting): Dusty Sage (#87A987) */
+  --secondary: #87A987;
+  --secondary-foreground: #1F2922;
+
+  /* 3. Soft Mint / Pale Sage (Light Accent & Tints): Whisper Green (#D8E2DC) */
+  --muted: #D8E2DC;
+  --border: #D8E2DC;
+  --input: #D8E2DC;
+
+  /* 4. Earth / Harvest Ochre (Warm Accent): Warm Wheat (#DDA15E) */
+  --accent: #DDA15E;
+  --accent-foreground: #1F2922;
+  --destructive: #DDA15E;
+  --destructive-foreground: #1F2922;
+
+  /* 5. Surface / Background Canvas: Crisp Warm Off-White (#F9FBF7) */
+  --background: #F9FBF7;
+
+  /* 6. Card & Container Surface: Pure White (#FFFFFF) */
+  --card: #FFFFFF;
+  --card-foreground: #1F2922;
+  --popover: #FFFFFF;
+  --popover-foreground: #1F2922;
+
+  /* 7. Loam Charcoal (Dark Neutral / Text): Deep Loam (#1F2922) */
+  --foreground: #1F2922;
+
+  /* 8. Muted Gray-Green (Secondary Text): Slate Moss (#5B6E61) */
+  --muted-foreground: #5B6E61;
+
+  --ring: #87A987;
+  --radius: 0.625rem;
 }
 
 .dark {
-  --background: oklch(0.15 0.02 145);
-  --foreground: oklch(0.98 0.01 145);
+  --background: #141B16;
+  --foreground: #F9FBF7;
+  --card: #1B241E;
+  --card-foreground: #F9FBF7;
+  --popover: #1B241E;
+  --popover-foreground: #F9FBF7;
+  --primary: #87A987;
+  --primary-foreground: #141B16;
+  --secondary: #2D5A27;
+  --secondary-foreground: #F9FBF7;
+  --accent: #DDA15E;
+  --accent-foreground: #141B16;
+  --destructive: #DDA15E;
+  --destructive-foreground: #141B16;
+  --muted: #243028;
+  --muted-foreground: #8FA89B;
+  --border: #2D3D32;
+  --input: #2D3D32;
+  --ring: #87A987;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: "Inter", sans-serif;
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* Explicit Brand Design Tokens */
+  --color-forest: #2D5A27;        /* 1. Forest Flora (Primary) */
+  --color-forest-dark: #1E3F1A;
+  --color-forest-light: #3D7535;
+  --color-sage: #87A987;          /* 2. Dusty Sage (Secondary) */
+  --color-whisper: #D8E2DC;       /* 3. Whisper Green (Tints & Borders) */
+  --color-wheat: #DDA15E;         /* 4. Warm Wheat (Harvest Accent) */
+  --color-canvas: #F9FBF7;        /* 5. Crisp Warm Off-White (Canvas) */
+  --color-surface: #FFFFFF;       /* 6. Pure White (Cards) */
+  --color-loam: #1F2922;          /* 7. Deep Loam (Primary Text) */
+  --color-moss: #5B6E61;          /* 8. Slate Moss (Secondary Text) */
+
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-display: "Plus Jakarta Sans", "Inter", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
 }
 
 body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background: var(--background);
+  background-color: var(--background);
   color: var(--foreground);
-  font-family: Inter, system-ui, sans-serif;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4, .font-heading {
+  font-family: var(--font-display);
+  letter-spacing: -0.02em;
+}
+
+code, kbd, samp, pre, .font-mono {
+  font-family: var(--font-mono);
 }
