@@ -101,8 +101,8 @@ export async function handleApiRequest(req, res) {
     return true
   }
 
-  // GET /api/farms/:id
-  const farmDetailMatch = pathname.match(/^\/api\/farms\/(\d+)$/)
+  // GET /api/farms/:id and GET /api/farms/:id/profile
+  const farmDetailMatch = pathname.match(/^\/api\/farms\/(\d+)(?:\/profile)?$/)
   if (farmDetailMatch && method === "GET") {
     const farmId = Number(farmDetailMatch[1])
     const farm = db.prepare(`
@@ -121,9 +121,63 @@ export async function handleApiRequest(req, res) {
     }
 
     const fields = db.prepare("SELECT * FROM farm_fields WHERE farm_id = ? ORDER BY id DESC").all(farmId)
-    const crops = db.prepare("SELECT * FROM crops WHERE farm_id = ? ORDER BY id DESC").all(farmId)
 
-    sendJson(res, 200, { ...farm, fields, crops })
+    const crops = db.prepare(`
+      SELECT c.*, ff.name as field_name 
+      FROM crops c 
+      LEFT JOIN farm_fields ff ON c.field_id = ff.id 
+      WHERE c.farm_id = ? 
+      ORDER BY c.id DESC
+    `).all(farmId)
+
+    const activePlantings = db.prepare(`
+      SELECT c.*, ff.name as field_name 
+      FROM crops c 
+      LEFT JOIN farm_fields ff ON c.field_id = ff.id 
+      WHERE c.farm_id = ? AND c.status != 'harvested' 
+      ORDER BY c.planted_date DESC
+    `).all(farmId)
+
+    const harvests = db.prepare(`
+      SELECT h.*, 
+        COALESCE(ff.name, (SELECT ff2.name FROM crops c2 JOIN farm_fields ff2 ON c2.field_id = ff2.id WHERE c2.id = h.crop_id)) as field_name,
+        'kg' as unit
+      FROM harvests h 
+      LEFT JOIN farm_fields ff ON h.field_id = ff.id 
+      WHERE h.farm_id = ? 
+         OR h.crop_id IN (SELECT id FROM crops WHERE farm_id = ?) 
+         OR h.farm_name = ?
+      ORDER BY h.harvest_date DESC
+    `).all(farmId, farmId, farm.name)
+
+    const sales = db.prepare(`
+      SELECT s.* 
+      FROM sales s 
+      WHERE s.farm_id = ? 
+         OR s.harvest_id IN (SELECT id FROM harvests WHERE farm_id = ? OR farm_name = ?)
+         OR s.crop_name IN (SELECT crop_name FROM harvests WHERE farm_id = ? OR farm_name = ?)
+      ORDER BY s.sale_date DESC
+    `).all(farmId, farmId, farm.name, farmId, farm.name)
+
+    const totalIncome = sales.reduce((acc, s) => acc + (Number(s.total_amount) || 0), 0)
+    const totalHarvestKg = harvests.reduce((acc, h) => acc + (Number(h.quantity_kg) || 0), 0)
+
+    sendJson(res, 200, {
+      ...farm,
+      status: farm.status || "Active",
+      fields,
+      crops,
+      activePlantings,
+      harvests,
+      sales,
+      financials: {
+        totalIncome,
+        totalHarvestKg,
+        cropCount: crops.length,
+        activePlantingsCount: activePlantings.length,
+        fieldsCount: fields.length,
+      },
+    })
     return true
   }
 

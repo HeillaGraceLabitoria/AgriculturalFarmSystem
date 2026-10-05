@@ -78,10 +78,37 @@ export function initDatabase() {
     );
   `)
 
-  // Ensure 'description' column exists in 'farms' table for existing databases
+  // Ensure 'description' and 'status' columns exist in 'farms' table for existing databases
   const farmCols = db.prepare("PRAGMA table_info(farms)").all()
   if (!farmCols.some((c) => c.name === "description")) {
     db.exec("ALTER TABLE farms ADD COLUMN description TEXT")
+  }
+  if (!farmCols.some((c) => c.name === "status")) {
+    db.exec("ALTER TABLE farms ADD COLUMN status TEXT DEFAULT 'Active'")
+  }
+
+  // Ensure 'field_id' column exists in 'crops' table
+  const cropCols = db.prepare("PRAGMA table_info(crops)").all()
+  if (!cropCols.some((c) => c.name === "field_id")) {
+    db.exec("ALTER TABLE crops ADD COLUMN field_id INTEGER REFERENCES farm_fields(id)")
+  }
+
+  // Ensure 'farm_id' and 'field_id' columns exist in 'harvests' table
+  const harvestCols = db.prepare("PRAGMA table_info(harvests)").all()
+  if (!harvestCols.some((c) => c.name === "farm_id")) {
+    db.exec("ALTER TABLE harvests ADD COLUMN farm_id INTEGER REFERENCES farms(id)")
+  }
+  if (!harvestCols.some((c) => c.name === "field_id")) {
+    db.exec("ALTER TABLE harvests ADD COLUMN field_id INTEGER REFERENCES farm_fields(id)")
+  }
+
+  // Ensure 'farm_id' and 'harvest_id' columns exist in 'sales' table
+  const saleCols = db.prepare("PRAGMA table_info(sales)").all()
+  if (!saleCols.some((c) => c.name === "farm_id")) {
+    db.exec("ALTER TABLE sales ADD COLUMN farm_id INTEGER REFERENCES farms(id)")
+  }
+  if (!saleCols.some((c) => c.name === "harvest_id")) {
+    db.exec("ALTER TABLE sales ADD COLUMN harvest_id INTEGER REFERENCES harvests(id)")
   }
 
   // Populate default farm descriptions if missing
@@ -90,6 +117,41 @@ export function initDatabase() {
     db.prepare("UPDATE farms SET description = ? WHERE name LIKE '%Sunrise Plains%' AND (description IS NULL OR description = '')").run("Large-scale mechanized grain production facility in Central Luzon.")
     db.prepare("UPDATE farms SET description = ? WHERE name LIKE '%Highland Organic%' AND (description IS NULL OR description = '')").run("Eco-certified cool climate vegetable farm in the Cordillera mountain range.")
     db.prepare("UPDATE farms SET description = ? WHERE name LIKE '%Mindanao Citrus%' AND (description IS NULL OR description = '')").run("Export-grade tropical fruit plantation and agro-forestry development.")
+    db.prepare("UPDATE farms SET status = 'Active' WHERE status IS NULL").run()
+  } catch {
+    // Non-blocking
+  }
+
+  // Link default crops to fields if unassigned
+  try {
+    const linkCropField = db.prepare("UPDATE crops SET field_id = ? WHERE id = ? AND field_id IS NULL")
+    linkCropField.run(1, 1) // Rice -> North Paddy Field A
+    linkCropField.run(2, 2) // Corn -> East Terrace Field B
+    linkCropField.run(3, 3) // Tomato -> Greenhouse Zone C
+    linkCropField.run(4, 4) // Rice -> Central Basin Field 1
+    linkCropField.run(5, 5) // White Corn -> Sector 2 West
+    linkCropField.run(6, 6) // Sugarcane -> Canal Plot 3
+    linkCropField.run(7, 7) // Cabbage -> Terrace Slope Alpha
+    linkCropField.run(8, 8) // Carrots -> Root Crop Zone
+    linkCropField.run(9, 9) // Bell Pepper -> Covered Garden 1
+  } catch {
+    // Non-blocking
+  }
+
+  // Link default harvests to farms/fields if unassigned
+  try {
+    db.prepare("UPDATE harvests SET farm_id = 2, field_id = 4 WHERE id = 1 AND farm_id IS NULL").run()
+    db.prepare("UPDATE harvests SET farm_id = 4 WHERE id = 2 AND farm_id IS NULL").run()
+    db.prepare("UPDATE harvests SET farm_id = (SELECT id FROM farms WHERE name = harvests.farm_name) WHERE farm_id IS NULL").run()
+  } catch {
+    // Non-blocking
+  }
+
+  // Link default sales to farms/harvests if unassigned
+  try {
+    db.prepare("UPDATE sales SET farm_id = 2, harvest_id = 1 WHERE id = 1 AND farm_id IS NULL").run()
+    db.prepare("UPDATE sales SET farm_id = 4, harvest_id = 2 WHERE id = 2 AND farm_id IS NULL").run()
+    db.prepare("UPDATE sales SET farm_id = 3 WHERE id = 3 AND farm_id IS NULL").run()
   } catch {
     // Non-blocking
   }

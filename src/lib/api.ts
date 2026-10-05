@@ -26,6 +26,14 @@ export interface FarmField {
   created_at?: string
 }
 
+export interface FarmFinancials {
+  totalIncome: number
+  totalHarvestKg: number
+  cropCount: number
+  activePlantingsCount: number
+  fieldsCount: number
+}
+
 export interface Farm {
   id: number
   name: string
@@ -33,11 +41,16 @@ export interface Farm {
   size_hectares: number
   total_area?: number
   description?: string
+  status?: string
   field_count?: number
   cultivated_area?: number
   crop_count?: number
   fields?: FarmField[]
   crops?: Crop[]
+  activePlantings?: Crop[]
+  harvests?: Harvest[]
+  sales?: Sale[]
+  financials?: FarmFinancials
   created_at?: string
 }
 
@@ -45,6 +58,8 @@ export interface Crop {
   id: number
   farm_id: number
   farm_name?: string
+  field_id?: number
+  field_name?: string
   name: string
   variety?: string
   planted_date: string
@@ -58,16 +73,22 @@ export interface Harvest {
   id: number
   crop_id?: number
   crop_name: string
+  farm_id?: number
   farm_name: string
+  field_id?: number
+  field_name?: string
   harvest_date: string
   quantity_kg: number
-  quality_grade: string
+  unit?: string
+  quality_grade?: string
   notes?: string
   created_at?: string
 }
 
 export interface Sale {
   id: number
+  farm_id?: number
+  harvest_id?: number
   crop_name: string
   buyer_name: string
   sale_date: string
@@ -139,6 +160,15 @@ export const api = {
   async getFarm(id: number): Promise<Farm> {
     const res = await fetch(`${API_BASE}/farms/${id}`)
     if (!res.ok) throw new Error("Failed to fetch farm details")
+    return await res.json()
+  },
+
+  async getFarmProfile(id: number): Promise<Farm> {
+    const res = await fetch(`${API_BASE}/farms/${id}/profile`)
+    if (!res.ok) {
+      // Fallback to /farms/${id}
+      return this.getFarm(id)
+    }
     return await res.json()
   },
 

@@ -350,7 +350,11 @@ export default function FarmManagement() {
                   <CardHeader className="pb-3">
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex-1">
-                        <CardTitle className="text-lg font-bold text-[#1F2922] hover:text-[#2D5A27]">
+                        <CardTitle
+                          className="text-lg font-bold text-[#1F2922] hover:text-[#2D5A27] cursor-pointer transition-colors"
+                          onClick={() => navigate(`/farms/${farm.id}`)}
+                          title="View Consolidated Farm Profile"
+                        >
                           {farm.name}
                         </CardTitle>
                         <CardDescription className="flex items-center gap-1 text-xs text-[#5B6E61] mt-1">
@@ -403,7 +407,7 @@ export default function FarmManagement() {
                     onClick={() => navigate(`/farms/${farm.id}`)}
                   >
                     <Eye className="h-3.5 w-3.5 text-[#2D5A27]" />
-                    Manage Fields
+                    View Farm Profile
                   </Button>
 
                   <div className="flex items-center gap-1">
