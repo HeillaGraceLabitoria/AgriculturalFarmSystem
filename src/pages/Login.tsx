@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { api } from "@/lib/api" // or your api import path
+import { api } from "@/lib/api"
 import {
   Card,
   CardHeader,
@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Button } from "@/components/ui/button"
 import { Leaf, Loader2, Database, Eye, EyeOff } from "lucide-react"
 
 export default function Login() {
@@ -56,24 +57,24 @@ export default function Login() {
           </CardDescription>
         </CardHeader>
 
- <CardContent>
-  {/* Add "hidden" inside className here: */}
-  <div className="hidden mb-5 flex items-start gap-2.5 rounded-xl border border-[#87A987]/30 bg-[#D8E2DC]/30 p-3.5 text-sm text-[#1F2922]">
-    <Database className="mt-0.5 h-4 w-4 shrink-0 text-[#2D5A27]" />
-    <div>
-      <p className="font-semibold text-xs text-[#2D5A27] uppercase tracking-wide">
-        Local SQLite Database Connected
-      </p>
-      <p className="text-xs text-[#5B6E61] mt-1 leading-relaxed">
-        Default Credentials:
-        <br />
-        Email: <code className="font-semibold text-[#1F2922]">admin@farm.com</code>
-        <br />
-        Password: <code className="font-semibold text-[#1F2922]">admin123</code>
-      </p>
-    </div>
-  </div>
-<form onSubmit={handleLogin} className="space-y-4">
+        <CardContent>
+          {/* Add "hidden" inside className here: */}
+          <div className="hidden mb-5 flex items-start gap-2.5 rounded-xl border border-[#87A987]/30 bg-[#D8E2DC]/30 p-3.5 text-sm text-[#1F2922]">
+            <Database className="mt-0.5 h-4 w-4 shrink-0 text-[#2D5A27]" />
+            <div>
+              <p className="font-semibold text-xs text-[#2D5A27] uppercase tracking-wide">
+                Local SQLite Database Connected
+              </p>
+              <p className="text-xs text-[#5B6E61] mt-1 leading-relaxed">
+                Default Credentials:
+                <br />
+                Email: <code className="font-semibold text-[#1F2922]">admin@farm.com</code>
+                <br />
+                Password: <code className="font-semibold text-[#1F2922]">admin123</code>
+              </p>
+            </div>
+          </div>
+          <form onSubmit={handleLogin} className="space-y-4">
             <div className="space-y-1.5">
               <Label htmlFor="email" className="text-xs font-semibold text-[#1F2922]">
                 Email Address
