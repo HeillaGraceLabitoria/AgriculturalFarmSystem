@@ -89,7 +89,7 @@ export default function Login() {
                 />
               </div>
 
-              <div className="space-y-1.5">
+         <div className="space-y-1.5">
                 <Label htmlFor="password" className="text-xs font-semibold text-[#1F2922]">
                   Password
                 </Label>
@@ -101,6 +101,7 @@ export default function Login() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     className="border-[#D8E2DC] pr-10"
+                    autoComplete="off"
                     required
                   />
                   <button
@@ -112,7 +113,6 @@ export default function Login() {
                   </button>
                 </div>
               </div>
-
               <Button
                 type="submit"
                 className="w-full bg-[#2D5A27] hover:bg-[#23471E] text-white flex items-center justify-center gap-2"
