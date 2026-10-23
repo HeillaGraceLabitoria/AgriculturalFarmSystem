@@ -465,47 +465,50 @@ export async function handleApiRequest(req, res) {
 
   return false
 }
-// GET all courses (for table display & dynamic dropdown)
+// GET /api/courses
 app.get('/api/courses', (req, res) => {
-  db.all('SELECT * FROM courses ORDER BY course_code ASC', [], (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
+  try {
+    const rows = db.prepare('SELECT * FROM courses ORDER BY course_code ASC').all();
     res.json(rows);
-  });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-// CREATE a course
+// POST /api/courses
 app.post('/api/courses', (req, res) => {
   const { course_code, course_name, description } = req.body;
   if (!course_code || !course_name) {
     return res.status(400).json({ error: 'Course code and name are required' });
   }
-  db.run(
-    'INSERT INTO courses (course_code, course_name, description) VALUES (?, ?, ?)',
-    [course_code.toUpperCase(), course_name, description || ''],
-    function (err) {
-      if (err) return res.status(500).json({ error: err.message });
-      res.status(201).json({ id: this.lastID, course_code, course_name, description });
-    }
-  );
+  try {
+    const stmt = db.prepare('INSERT INTO courses (course_code, course_name, description) VALUES (?, ?, ?)');
+    const result = stmt.run(course_code.toUpperCase(), course_name, description || '');
+    res.status(201).json({ id: result.lastInsertRowid, course_code, course_name, description });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-// UPDATE a course
+// PUT /api/courses/:id
 app.put('/api/courses/:id', (req, res) => {
   const { course_code, course_name, description } = req.body;
-  db.run(
-    'UPDATE courses SET course_code = ?, course_name = ?, description = ? WHERE id = ?',
-    [course_code.toUpperCase(), course_name, description || '', req.params.id],
-    function (err) {
-      if (err) return res.status(500).json({ error: err.message });
-      res.json({ message: 'Course updated successfully' });
-    }
-  );
+  try {
+    const stmt = db.prepare('UPDATE courses SET course_code = ?, course_name = ?, description = ? WHERE id = ?');
+    stmt.run(course_code.toUpperCase(), course_name, description || '', req.params.id);
+    res.json({ message: 'Course updated successfully' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-// DELETE a course
+// DELETE /api/courses/:id
 app.delete('/api/courses/:id', (req, res) => {
-  db.run('DELETE FROM courses WHERE id = ?', [req.params.id], function (err) {
-    if (err) return res.status(500).json({ error: err.message });
+  try {
+    const stmt = db.prepare('DELETE FROM courses WHERE id = ?');
+    stmt.run(req.params.id);
     res.json({ message: 'Course deleted successfully' });
-  });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
