@@ -7,7 +7,8 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import {
+import { GraduationCap, ... } from "lucide-react"
+import {import { Leaf, Database, LayoutGrid, RefreshCw, LogOut, GraduationCap } from "lucide-react"
   Dialog,
   DialogContent,
   DialogHeader,
@@ -134,7 +135,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Navigation & User actions */}
+     {/* Navigation & User actions */}
         <div className="flex items-center gap-2">
           <Button
             variant="default"
@@ -144,6 +145,17 @@ export default function Dashboard() {
           >
             <LayoutGrid className="h-4 w-4 text-[#1F2922]" />
             Farm Management
+          </Button>
+
+          {/* New Course Management Button (Task 1) */}
+          <Button
+            variant="default"
+            size="sm"
+            onClick={() => navigate("/courses")}
+            className="bg-[#D8E2DC] hover:bg-[#c2d1c8] text-[#1F2922] gap-1.5 shadow-xs font-bold"
+          >
+            <GraduationCap className="h-4 w-4 text-[#2D5A27]" />
+            Course Management
           </Button>
 
           <Button

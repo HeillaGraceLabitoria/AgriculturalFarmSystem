@@ -237,3 +237,30 @@ export function initDatabase() {
     }
   }
 }
+
+// Courses table for Course Management Module
+db.run(`
+  CREATE TABLE IF NOT EXISTS courses (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    course_code TEXT UNIQUE NOT NULL,
+    course_name TEXT NOT NULL,
+    description TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )
+`);
+
+// Pre-seed default courses from the exam if table is empty
+db.get("SELECT COUNT(*) as count FROM courses", (err, row) => {
+  if (row && row.count === 0) {
+    const defaultCourses = [
+      ['BSIT', 'Bachelor of Science in Information Technology', 'IT Program'],
+      ['BSBA', 'Bachelor of Science in Business Administration', 'Business Program'],
+      ['BSED', 'Bachelor of Secondary Education', 'Education Program'],
+      ['BSN', 'Bachelor of Science in Nursing', 'Nursing Program'],
+      ['BEED', 'Bachelor of Elementary Education', 'Elementary Education']
+    ];
+    defaultCourses.forEach(([code, name, desc]) => {
+      db.run("INSERT INTO courses (course_code, course_name, description) VALUES (?, ?, ?)", [code, name, desc]);
+    });
+  }
+});
