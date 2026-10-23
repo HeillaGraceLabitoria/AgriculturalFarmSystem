@@ -32,7 +32,6 @@ import {
   ExternalLink,
   GraduationCap,
 } from "lucide-react"
-
 export default function Dashboard() {
   const navigate = useNavigate()
   const [stats, setStats] = useState<Stats>({
