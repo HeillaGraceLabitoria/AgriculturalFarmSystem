@@ -1,171 +1,238 @@
 import { useState, useEffect } from "react"
-import { GraduationCap, Plus, Pencil, Trash2, Search } from "lucide-react"
+import { GraduationCap, Plus, Pencil, Trash2, Search, Calendar, User, Hash } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 
-interface Course {
+interface StudentEnrollment {
   id: number
-  course_code: string
-  course_name: string
-  description: string
+  student_name: string
+  college_id: string
+  course: "BSIT" | "BSBA" | "BSED" | "BSN" | "BEED" | string
+  enrollment_date: string
 }
 
+const COURSE_OPTIONS = [
+  { code: "BSIT", name: "BS Information Technology" },
+  { code: "BSBA", name: "BS Business Administration" },
+  { code: "BSED", name: "BS Secondary Education" },
+  { code: "BSN", name: "BS Nursing" },
+  { code: "BEED", name: "BS Elementary Education" },
+]
+
+const STORAGE_KEY = "afms_student_enrollments"
+
+const DEFAULT_ENROLLMENTS: StudentEnrollment[] = [
+  {
+    id: 1,
+    student_name: "Heilla Grace Labitoria",
+    college_id: "22-01948",
+    course: "BSIT",
+    enrollment_date: "2024-08-15",
+  },
+  {
+    id: 2,
+    student_name: "Juan Dela Cruz",
+    college_id: "23-00412",
+    course: "BSBA",
+    enrollment_date: "2024-08-18",
+  },
+]
+
 export default function CourseManagement() {
-  const [courses, setCourses] = useState<Course[]>([])
-  const [loading, setLoading] = useState(true)
+  const [enrollments, setEnrollments] = useState<StudentEnrollment[]>([])
   const [searchTerm, setSearchTerm] = useState("")
+  const [filterCourse, setFilterCourse] = useState("ALL")
 
-  const [editingId, setEditingId] = useState<number | null>(null)
-  const [form, setForm] = useState({ course_code: "", course_name: "", description: "" })
   const [showModal, setShowModal] = useState(false)
-  const [errorMsg, setErrorMsg] = useState("")
+  const [editingId, setEditingId] = useState<number | null>(null)
+  const [form, setForm] = useState({
+    student_name: "",
+    college_id: "",
+    course: "BSIT",
+    enrollment_date: new Date().toISOString().split("T")[0],
+  })
 
+  // Load from localStorage (persists on Vercel static deployments)
   useEffect(() => {
-    fetchCourses()
+    const saved = localStorage.getItem(STORAGE_KEY)
+    if (saved) {
+      try {
+        setEnrollments(JSON.parse(saved))
+      } catch {
+        setEnrollments(DEFAULT_ENROLLMENTS)
+      }
+    } else {
+      setEnrollments(DEFAULT_ENROLLMENTS)
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_ENROLLMENTS))
+    }
   }, [])
 
-  async function fetchCourses() {
-    try {
-      setLoading(true)
-      const res = await fetch("/api/courses").then(r => r.json())
-      setCourses(Array.isArray(res) ? res : [])
-    } catch (e) {
-      console.error(e)
-    } finally {
-      setLoading(false)
-    }
+  function saveEnrollments(updated: StudentEnrollment[]) {
+    setEnrollments(updated)
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated))
   }
 
   function handleOpenAdd() {
     setEditingId(null)
-    setForm({ course_code: "", course_name: "", description: "" })
-    setErrorMsg("")
-    setShowModal(true)
-  }
-
-  function handleOpenEdit(course: Course) {
-    setEditingId(course.id)
     setForm({
-      course_code: course.course_code,
-      course_name: course.course_name,
-      description: course.description || ""
+      student_name: "",
+      college_id: "",
+      course: "BSIT",
+      enrollment_date: new Date().toISOString().split("T")[0],
     })
-    setErrorMsg("")
     setShowModal(true)
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+  function handleOpenEdit(item: StudentEnrollment) {
+    setEditingId(item.id)
+    setForm({
+      student_name: item.student_name,
+      college_id: item.college_id,
+      course: item.course,
+      enrollment_date: item.enrollment_date,
+    })
+    setShowModal(true)
+  }
+
+  function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    setErrorMsg("")
 
-    try {
-      const url = editingId ? `/api/courses/${editingId}` : "/api/courses"
-      const method = editingId ? "PUT" : "POST"
+    if (!form.student_name.trim() || !form.college_id.trim()) {
+      alert("Please fill in both Student Name and College ID.")
+      return
+    }
 
-      const res = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form)
-      })
-
-      if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || "Failed to save course")
+    if (editingId !== null) {
+      // UPDATE (U in CRUD)
+      const updated = enrollments.map((item) =>
+        item.id === editingId ? { ...item, ...form } : item
+      )
+      saveEnrollments(updated)
+    } else {
+      // CREATE (C in CRUD)
+      const newItem: StudentEnrollment = {
+        id: Date.now(),
+        ...form,
       }
+      saveEnrollments([newItem, ...enrollments])
+    }
 
-      setShowModal(false)
-      fetchCourses()
-    } catch (err: any) {
-      setErrorMsg(err.message)
+    setShowModal(false)
+  }
+
+  // DELETE (D in CRUD)
+  function handleDelete(id: number) {
+    if (window.confirm("Are you sure you want to remove this student enrollment record?")) {
+      const updated = enrollments.filter((item) => item.id !== id)
+      saveEnrollments(updated)
     }
   }
 
-  async function handleDelete(id: number) {
-    if (!confirm("Are you sure you want to delete this course?")) return
-    try {
-      const res = await fetch(`/api/courses/${id}`, { method: "DELETE" })
-      if (res.ok) {
-        fetchCourses()
-      }
-    } catch (e) {
-      console.error(e)
-    }
-  }
-
-  const filteredCourses = courses.filter(c =>
-    c.course_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    c.course_name.toLowerCase().includes(searchTerm.toLowerCase())
-  )
+  // READ / Search Filtering (R in CRUD)
+  const filteredEnrollments = enrollments.filter((item) => {
+    const matchesSearch =
+      item.student_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.college_id.toLowerCase().includes(searchTerm.toLowerCase())
+    const matchesCourse = filterCourse === "ALL" || item.course === filterCourse
+    return matchesSearch && matchesCourse
+  })
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
+      {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-[#1F2922] flex items-center gap-2">
             <GraduationCap className="h-6 w-6 text-[#2D5A27]" />
-            Course Management
+            Student Course Enrollment Management
           </h1>
           <p className="text-sm text-[#5B6E61]">
-            Create, view, update, and delete academic courses and programs.
+            Manage student registrations, assigned degree programs, and enrollment dates.
           </p>
         </div>
         <Button
           onClick={handleOpenAdd}
-          className="bg-[#2D5A27] hover:bg-[#23471E] text-[#F9FBF7] flex items-center gap-2"
+          className="bg-[#2D5A27] hover:bg-[#23471E] text-[#F9FBF7] flex items-center gap-2 shadow-xs"
         >
-          <Plus className="h-4 w-4" /> Add Course
+          <Plus className="h-4 w-4" /> Enroll New Student
         </Button>
       </div>
 
+      {/* Filters & Search */}
       <Card className="border-[#D8E2DC]">
-        <CardContent className="p-4">
-          <div className="relative max-w-md">
+        <CardContent className="p-4 flex flex-col md:flex-row gap-4 justify-between items-stretch md:items-center">
+          <div className="relative flex-1 max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
             <Input
-              placeholder="Search by course code or title..."
+              placeholder="Search by student name or college ID..."
               value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
+              onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-9 text-sm border-[#D8E2DC]"
             />
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Label className="text-xs font-semibold text-[#1F2922] whitespace-nowrap">
+              Filter Course:
+            </Label>
+            <select
+              value={filterCourse}
+              onChange={(e) => setFilterCourse(e.target.value)}
+              className="h-9 px-3 py-1 bg-white border border-[#D8E2DC] rounded-md text-xs font-medium text-[#1F2922] focus:outline-hidden focus:ring-1 focus:ring-[#2D5A27]"
+            >
+              <option value="ALL">All Courses</option>
+              {COURSE_OPTIONS.map((c) => (
+                <option key={c.code} value={c.code}>
+                  {c.code} - {c.name}
+                </option>
+              ))}
+            </select>
           </div>
         </CardContent>
       </Card>
 
-      <Card className="border-[#D8E2DC] overflow-hidden">
+      {/* Data Table */}
+      <Card className="border-[#D8E2DC] overflow-hidden shadow-xs">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead className="bg-[#D8E2DC]/40 text-[#1F2922] font-semibold border-b border-[#D8E2DC]">
               <tr>
-                <th className="p-3.5">ID</th>
-                <th className="p-3.5">Course Code</th>
-                <th className="p-3.5">Course Name / Title</th>
-                <th className="p-3.5">Description</th>
+                <th className="p-3.5">College ID</th>
+                <th className="p-3.5">Student Name</th>
+                <th className="p-3.5">Course Choice</th>
+                <th className="p-3.5">Enrollment Date</th>
                 <th className="p-3.5 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#D8E2DC]">
-              {loading ? (
+              {filteredEnrollments.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="p-6 text-center text-gray-500">Loading courses...</td>
-                </tr>
-              ) : filteredCourses.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="p-6 text-center text-gray-500">No courses registered yet.</td>
+                  <td colSpan={5} className="p-8 text-center text-gray-500">
+                    No enrollment records found.
+                  </td>
                 </tr>
               ) : (
-                filteredCourses.map(c => (
-                  <tr key={c.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="p-3.5 font-mono text-xs text-gray-500">{c.id}</td>
-                    <td className="p-3.5 font-bold text-[#2D5A27]">{c.course_code}</td>
-                    <td className="p-3.5 font-medium text-[#1F2922]">{c.course_name}</td>
-                    <td className="p-3.5 text-xs text-gray-600">{c.description || "—"}</td>
+                filteredEnrollments.map((row) => (
+                  <tr key={row.id} className="hover:bg-slate-50 transition-colors">
+                    <td className="p-3.5 font-mono text-xs font-semibold text-[#1F2922]">
+                      {row.college_id}
+                    </td>
+                    <td className="p-3.5 font-medium text-[#1F2922]">{row.student_name}</td>
+                    <td className="p-3.5">
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#2D5A27]/10 text-[#2D5A27] border border-[#2D5A27]/20">
+                        {row.course}
+                      </span>
+                    </td>
+                    <td className="p-3.5 text-xs text-gray-600 font-mono">
+                      {row.enrollment_date}
+                    </td>
                     <td className="p-3.5 text-right space-x-2">
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => handleOpenEdit(c)}
+                        onClick={() => handleOpenEdit(row)}
                         className="h-8 border-[#87A987] text-[#2D5A27] hover:bg-[#87A987]/20"
                       >
                         <Pencil className="h-3.5 w-3.5 mr-1" /> Edit
@@ -173,7 +240,7 @@ export default function CourseManagement() {
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => handleDelete(c.id)}
+                        onClick={() => handleDelete(row.id)}
                         className="h-8 border-rose-300 text-rose-600 hover:bg-rose-50"
                       >
                         <Trash2 className="h-3.5 w-3.5 mr-1" /> Delete
@@ -187,54 +254,86 @@ export default function CourseManagement() {
         </div>
       </Card>
 
+      {/* Modal for Add / Edit */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
-          <Card className="w-full max-w-md border-[#D8E2DC] shadow-xl">
+          <Card className="w-full max-w-md border-[#D8E2DC] shadow-2xl">
             <CardHeader className="pb-3 border-b border-[#D8E2DC]">
               <CardTitle className="text-lg font-bold text-[#1F2922] flex items-center gap-2">
                 <GraduationCap className="h-5 w-5 text-[#2D5A27]" />
-                {editingId ? "Edit Course" : "Add New Course"}
+                {editingId ? "Edit Student Record" : "Enroll New Student"}
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-4">
               <form onSubmit={handleSubmit} className="space-y-4">
-                {errorMsg && (
-                  <div className="p-2 text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded">
-                    {errorMsg}
-                  </div>
-                )}
+                {/* College ID */}
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold text-[#1F2922]">Course Code (e.g. BSIT, BSBA)</Label>
+                  <Label className="text-xs font-semibold text-[#1F2922] flex items-center gap-1">
+                    <Hash className="h-3.5 w-3.5 text-gray-500" /> College ID
+                  </Label>
                   <Input
-                    placeholder="BSIT"
-                    value={form.course_code}
-                    onChange={e => setForm({ ...form, course_code: e.target.value })}
+                    placeholder="e.g. 23-01948"
+                    value={form.college_id}
+                    onChange={(e) => setForm({ ...form, college_id: e.target.value })}
+                    className="border-[#D8E2DC]"
                     required
                   />
                 </div>
+
+                {/* Student Name */}
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold text-[#1F2922]">Course Name</Label>
+                  <Label className="text-xs font-semibold text-[#1F2922] flex items-center gap-1">
+                    <User className="h-3.5 w-3.5 text-gray-500" /> Student Full Name
+                  </Label>
                   <Input
-                    placeholder="Bachelor of Science in Information Technology"
-                    value={form.course_name}
-                    onChange={e => setForm({ ...form, course_name: e.target.value })}
+                    placeholder="e.g. Heilla Grace Labitoria"
+                    value={form.student_name}
+                    onChange={(e) => setForm({ ...form, student_name: e.target.value })}
+                    className="border-[#D8E2DC]"
                     required
                   />
                 </div>
+
+                {/* Course Dropdown */}
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold text-[#1F2922]">Description / Department</Label>
+                  <Label className="text-xs font-semibold text-[#1F2922] flex items-center gap-1">
+                    <GraduationCap className="h-3.5 w-3.5 text-gray-500" /> Course Choice
+                  </Label>
+                  <select
+                    value={form.course}
+                    onChange={(e) => setForm({ ...form, course: e.target.value })}
+                    className="w-full h-10 px-3 bg-white border border-[#D8E2DC] rounded-md text-sm text-[#1F2922] focus:outline-hidden focus:ring-1 focus:ring-[#2D5A27]"
+                    required
+                  >
+                    {COURSE_OPTIONS.map((c) => (
+                      <option key={c.code} value={c.code}>
+                        {c.code} — {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Enrollment Date */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold text-[#1F2922] flex items-center gap-1">
+                    <Calendar className="h-3.5 w-3.5 text-gray-500" /> Enrollment Date
+                  </Label>
                   <Input
-                    placeholder="School of Engineering, Architecture, and IT"
-                    value={form.description}
-                    onChange={e => setForm({ ...form, description: e.target.value })}
+                    type="date"
+                    value={form.enrollment_date}
+                    onChange={(e) => setForm({ ...form, enrollment_date: e.target.value })}
+                    className="border-[#D8E2DC]"
+                    required
                   />
                 </div>
-                <div className="flex justify-end gap-2 pt-3 border-t border-[#D8E2DC]">
+
+                {/* Actions */}
+                <div className="flex justify-end gap-2 pt-4 border-t border-[#D8E2DC]">
                   <Button type="button" variant="outline" onClick={() => setShowModal(false)}>
                     Cancel
                   </Button>
                   <Button type="submit" className="bg-[#2D5A27] hover:bg-[#23471E] text-white">
-                    {editingId ? "Save Changes" : "Create Course"}
+                    {editingId ? "Update Student" : "Register Enrollment"}
                   </Button>
                 </div>
               </form>
