@@ -73,18 +73,18 @@ export default function Login() {
                   {error}
                 </div>
               )}
-
-              <div className="space-y-1.5">
+<div className="space-y-1.5">
                 <Label htmlFor="email" className="text-xs font-semibold text-[#1F2922]">
                   Username or Email
                 </Label>
                 <Input
                   id="email"
                   type="email"
-                  placeholder="admin@farm.local"
+                  placeholder=""
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="border-[#D8E2DC]"
+                  autoComplete="off"
                   required
                 />
               </div>
