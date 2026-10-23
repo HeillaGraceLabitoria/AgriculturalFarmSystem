@@ -7,8 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { GraduationCap, ... } from "lucide-react"
-import {import { Leaf, Database, LayoutGrid, RefreshCw, LogOut, GraduationCap } from "lucide-react"
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -31,6 +30,7 @@ import {
   Layers,
   ArrowRight,
   ExternalLink,
+  GraduationCap,
 } from "lucide-react"
 
 export default function Dashboard() {
@@ -292,36 +292,38 @@ export default function Dashboard() {
                 View All in Farm Manager
                 <ExternalLink className="h-3.5 w-3.5 text-[#2D5A27]" />
               </Button>
+<Button
+            onClick={() => setOpenNewFarm(true)}
+            className="bg-[#2D5A27] hover:bg-[#23471E] text-[#F9FBF7] gap-2 shadow-xs"
+          >
+            <Plus className="h-4 w-4" />
+            Add New Farm
+          </Button>
 
-              <Dialog open={openNewFarm} onOpenChange={setOpenNewFarm}>
-                <Button
-                  onClick={() => setOpenNewFarm(true)}
-                  className="bg-[#2D5A27] hover:bg-[#23471E] text-[#F9FBF7] gap-2 shadow-xs font-semibold"
-                >
-                  <Plus className="h-4 w-4" />
-                  Add New Farm
-                </Button>
-                <DialogContent className="sm:max-w-md bg-[#FFFFFF] border-[#D8E2DC]">
-                  <DialogHeader>
-                    <DialogTitle className="text-[#1F2922]">Register New Farm</DialogTitle>
-                    <DialogDescription className="text-xs text-[#5B6E61]">
-                      Add a new agricultural site to your local SQLite database.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <form onSubmit={handleCreateFarm} className="space-y-4 pt-2">
-                    <div className="space-y-1.5">
-                      <Label htmlFor="farm-name" className="text-xs font-semibold text-[#1F2922]">
-                        Farm Name <span className="text-[#DDA15E]">*</span>
-                      </Label>
-                      <Input
-                        id="farm-name"
-                        placeholder="e.g. Sunny Brook Agri Hub"
-                        value={newFarmName}
-                        onChange={(e) => setNewFarmName(e.target.value)}
-                        className="border-[#D8E2DC] focus-visible:border-[#87A987] focus-visible:ring-[#87A987]/30 text-[#1F2922]"
-                        required
-                      />
-                    </div>
+          <Dialog open={openNewFarm} onOpenChange={setOpenNewFarm}>
+           
+            <DialogContent className="sm:max-w-md bg-[#FFFFFF] border-[#D8E2DC]">
+              <DialogHeader>
+                <DialogTitle className="text-[#1F2922]">Register New Farm</DialogTitle>
+                <DialogDescription className="text-xs text-[#5B6E61]">
+                  Add a new agricultural site to your local SQLite database.
+                </DialogDescription>
+              </DialogHeader>
+
+              <form onSubmit={handleCreateFarm} className="space-y-4 pt-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="farm-name" className="text-xs font-semibold text-[#1F2922]">
+                  Farm Name <span className="text-[#DDA15E]">*</span>
+                </Label>
+                <Input
+                  id="farm-name"
+                  placeholder="e.g. Sunny Brook Agri Hub"
+                  value={newFarmName}
+                  onChange={(e) => setNewFarmName(e.target.value)}
+                  className="border-[#D8E2DC] focus-visible:border-[#87A987]"
+                  required
+                />
+              </div>
 
                     <div className="space-y-1.5">
                       <Label htmlFor="farm-location" className="text-xs font-semibold text-[#1F2922]">
