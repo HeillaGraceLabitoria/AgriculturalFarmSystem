@@ -2,7 +2,8 @@ import { DatabaseSync } from "node:sqlite"
 import path from "node:path"
 import fs from "node:fs"
 
-const dbDir = path.resolve(import.meta.dirname, "../data")
+const isVercel = Boolean(process.env.VERCEL)
+const dbDir = isVercel ? "/tmp" : path.resolve(import.meta.dirname, "../data")
 if (!fs.existsSync(dbDir)) {
   fs.mkdirSync(dbDir, { recursive: true })
 }
@@ -76,6 +77,51 @@ export function initDatabase() {
       payment_status TEXT NOT NULL DEFAULT 'paid',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+
+    -- WBS 1.5: System-wide Audit Logging
+    CREATE TABLE IF NOT EXISTS audit_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_name TEXT NOT NULL,
+      user_role TEXT NOT NULL,
+      action TEXT NOT NULL,
+      module TEXT NOT NULL,
+      details TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- WBS 2.1: Crop Classification & Growing Periods Reference Catalog
+    CREATE TABLE IF NOT EXISTS crop_catalog (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      variety TEXT NOT NULL,
+      category TEXT NOT NULL,
+      growing_days INTEGER NOT NULL DEFAULT 90,
+      ideal_soil TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- WBS 2.2: Shared Fertilizer Master List & N-P-K Catalog
+    CREATE TABLE IF NOT EXISTS fertilizers (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      npk_ratio TEXT NOT NULL,
+      type TEXT NOT NULL,
+      unit_price REAL NOT NULL,
+      unit TEXT NOT NULL DEFAULT 'bag (50kg)',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- WBS 2.3: Customer & Stakeholder Directory
+    CREATE TABLE IF NOT EXISTS customers (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      contact_person TEXT,
+      phone TEXT,
+      email TEXT,
+      buyer_type TEXT NOT NULL DEFAULT 'Wholesaler',
+      address TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
   `)
 
   // Ensure 'description' and 'status' columns exist in 'farms' table for existing databases
@@ -125,15 +171,15 @@ export function initDatabase() {
   // Link default crops to fields if unassigned
   try {
     const linkCropField = db.prepare("UPDATE crops SET field_id = ? WHERE id = ? AND field_id IS NULL")
-    linkCropField.run(1, 1) // Rice -> North Paddy Field A
-    linkCropField.run(2, 2) // Corn -> East Terrace Field B
-    linkCropField.run(3, 3) // Tomato -> Greenhouse Zone C
-    linkCropField.run(4, 4) // Rice -> Central Basin Field 1
-    linkCropField.run(5, 5) // White Corn -> Sector 2 West
-    linkCropField.run(6, 6) // Sugarcane -> Canal Plot 3
-    linkCropField.run(7, 7) // Cabbage -> Terrace Slope Alpha
-    linkCropField.run(8, 8) // Carrots -> Root Crop Zone
-    linkCropField.run(9, 9) // Bell Pepper -> Covered Garden 1
+    linkCropField.run(1, 1)
+    linkCropField.run(2, 2)
+    linkCropField.run(3, 3)
+    linkCropField.run(4, 4)
+    linkCropField.run(5, 5)
+    linkCropField.run(6, 6)
+    linkCropField.run(7, 7)
+    linkCropField.run(8, 8)
+    linkCropField.run(9, 9)
   } catch {
     // Non-blocking
   }
@@ -156,13 +202,24 @@ export function initDatabase() {
     // Non-blocking
   }
 
-  // Check if initial user exists
+  // Check if initial admin user exists
   const userCount = db.prepare("SELECT COUNT(*) as count FROM users").get().count
   if (userCount === 0) {
     db.prepare(`
       INSERT INTO users (name, email, password, role)
       VALUES (?, ?, ?, ?)
     `).run("Farm Administrator", "admin@farm.com", "admin123", "admin")
+  }
+
+  // Seed WBS 1.4 additional role account (Field Worker)
+  const workerExists = db.prepare("SELECT id FROM users WHERE email = ?").get("worker@farm.com")
+  if (!workerExists) {
+    db.prepare("INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)").run(
+      "Field Operations Staff",
+      "worker@farm.com",
+      "worker123",
+      "worker"
+    )
   }
 
   // Check if farms exist (if 0, seed defaults)
@@ -235,5 +292,44 @@ export function initDatabase() {
       insertField.run(highland.id, "Root Crop Zone", 2.2, "Rich volcanic soil plot for organic carrots", "Active")
       insertField.run(highland.id, "Covered Garden 1", 1.8, "UV-filtered polyhouse for bell peppers", "Prepared")
     }
+  }
+
+  // Seed WBS 2.1 Crop Catalog
+  if (db.prepare("SELECT COUNT(*) as count FROM crop_catalog").get().count === 0) {
+    const insCat = db.prepare("INSERT INTO crop_catalog (name, variety, category, growing_days, ideal_soil) VALUES (?, ?, ?, ?, ?)")
+    insCat.run("Rice", "Jasmine RC222", "Cereal Grain", 115, "Clay Loam / Irrigated Paddy")
+    insCat.run("Rice", "NSIC Rc160", "Cereal Grain", 110, "Alluvial Lowland")
+    insCat.run("Corn", "Hybrid Yellow", "Cereal Grain", 105, "Sandy Loam")
+    insCat.run("Tomato", "Diamante Max", "High-Value Vegetable", 75, "Well-drained Loam")
+    insCat.run("Cabbage", "Rare Ball", "Highland Vegetable", 80, "Volcanic Loam")
+    insCat.run("Banana", "Cavendish", "Tropical Fruit", 270, "Deep Silty Loam")
+  }
+
+  // Seed WBS 2.2 Fertilizers
+  if (db.prepare("SELECT COUNT(*) as count FROM fertilizers").get().count === 0) {
+    const insFert = db.prepare("INSERT INTO fertilizers (name, npk_ratio, type, unit_price, unit) VALUES (?, ?, ?, ?, ?)")
+    insFert.run("Complete Fertilizer (Triple 14)", "14-14-14", "Synthetic Granular", 1450.0, "bag (50kg)")
+    insFert.run("Urea (46-0-0)", "46-0-0", "Nitrogenous", 1380.0, "bag (50kg)")
+    insFert.run("Ammonium Phosphate", "16-20-0", "Starter Compound", 1420.0, "bag (50kg)")
+    insFert.run("Vermicompost Organic", "2-1-1", "Organic Soil Conditioner", 450.0, "sack (40kg)")
+  }
+
+  // Seed WBS 2.3 Customers
+  if (db.prepare("SELECT COUNT(*) as count FROM customers").get().count === 0) {
+    const insCust = db.prepare("INSERT INTO customers (name, contact_person, phone, email, buyer_type, address) VALUES (?, ?, ?, ?, ?, ?)")
+    insCust.run("National Food Authority / Regional Grain Trading", "Engr. Roberto Reyes", "0917-555-0192", "procurement@nfa-region2.gov.ph", "Government Agency", "Bayombong, Nueva Vizcaya")
+    insCust.run("Davao Fresh Produce Trading Corp", "Elena Mendoza", "0918-442-8831", "orders@davaofresh.ph", "Export Wholesaler", "Davao City")
+    insCust.run("Benguet Agri-Hub Coop", "Mario Dawang", "0920-771-3304", "coop@benguetagri.org", "Cooperative", "La Trinidad, Benguet")
+  }
+
+  // Seed initial WBS 1.5 Audit Log
+  if (db.prepare("SELECT COUNT(*) as count FROM audit_logs").get().count === 0) {
+    db.prepare("INSERT INTO audit_logs (user_name, user_role, action, module, details) VALUES (?, ?, ?, ?, ?)").run(
+      "Farm Administrator",
+      "admin",
+      "SYSTEM_INIT",
+      "Foundation & Security",
+      "Initialized database schema, RBAC roles, and master reference catalogs"
+    )
   }
 }

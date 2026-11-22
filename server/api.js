@@ -333,7 +333,7 @@ export async function handleApiRequest(req, res) {
   // PUT /api/fields/:id
   if (fieldDetailMatch && method === "PUT") {
     const fieldId = Number(fieldDetailMatch[1])
-    const { farm_id, name, area, description, status } = await parseJsonBody(req)
+    const { name, area, description, status } = await parseJsonBody(req)
 
     if (!name || name.trim() === "") {
       sendJson(res, 400, { error: "Field name is required" })
@@ -384,16 +384,17 @@ export async function handleApiRequest(req, res) {
   }
 
   if (pathname === "/api/crops" && method === "POST") {
-    const { farm_id, name, variety, planted_date, expected_harvest_date, status, area_hectares } = await parseJsonBody(req)
+    const { farm_id, field_id, name, variety, planted_date, expected_harvest_date, status, area_hectares } = await parseJsonBody(req)
     if (!name || !planted_date) {
       sendJson(res, 400, { error: "Crop name and planted date are required" })
       return true
     }
     const result = db.prepare(`
-      INSERT INTO crops (farm_id, name, variety, planted_date, expected_harvest_date, status, area_hectares)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO crops (farm_id, field_id, name, variety, planted_date, expected_harvest_date, status, area_hectares)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       farm_id ? Number(farm_id) : null,
+      field_id ? Number(field_id) : null,
       name,
       variety || null,
       planted_date,
@@ -414,17 +415,19 @@ export async function handleApiRequest(req, res) {
   }
 
   if (pathname === "/api/harvests" && method === "POST") {
-    const { crop_id, crop_name, farm_name, harvest_date, quantity_kg, quality_grade, notes } = await parseJsonBody(req)
+    const { crop_id, crop_name, farm_id, field_id, farm_name, harvest_date, quantity_kg, quality_grade, notes } = await parseJsonBody(req)
     if (!crop_name || !harvest_date || !quantity_kg) {
       sendJson(res, 400, { error: "Crop name, harvest date, and quantity are required" })
       return true
     }
     const result = db.prepare(`
-      INSERT INTO harvests (crop_id, crop_name, farm_name, harvest_date, quantity_kg, quality_grade, notes)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO harvests (crop_id, crop_name, farm_id, field_id, farm_name, harvest_date, quantity_kg, quality_grade, notes)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       crop_id ? Number(crop_id) : null,
       crop_name,
+      farm_id ? Number(farm_id) : null,
+      field_id ? Number(field_id) : null,
       farm_name || "General Farm",
       harvest_date,
       Number(quantity_kg),
@@ -444,7 +447,7 @@ export async function handleApiRequest(req, res) {
   }
 
   if (pathname === "/api/sales" && method === "POST") {
-    const { crop_name, buyer_name, sale_date, quantity_kg, price_per_kg, payment_status } = await parseJsonBody(req)
+    const { farm_id, harvest_id, crop_name, buyer_name, sale_date, quantity_kg, price_per_kg, payment_status } = await parseJsonBody(req)
     if (!crop_name || !buyer_name || !quantity_kg || !price_per_kg) {
       sendJson(res, 400, { error: "Crop name, buyer name, quantity, and price are required" })
       return true
@@ -454,12 +457,117 @@ export async function handleApiRequest(req, res) {
     const total = qty * price
 
     const result = db.prepare(`
-      INSERT INTO sales (crop_name, buyer_name, sale_date, quantity_kg, price_per_kg, total_amount, payment_status)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(crop_name, buyer_name, sale_date, qty, price, total, payment_status || "paid")
+      INSERT INTO sales (farm_id, harvest_id, crop_name, buyer_name, sale_date, quantity_kg, price_per_kg, total_amount, payment_status)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      farm_id ? Number(farm_id) : null,
+      harvest_id ? Number(harvest_id) : null,
+      crop_name,
+      buyer_name,
+      sale_date,
+      qty,
+      price,
+      total,
+      payment_status || "paid"
+    )
 
     const newSale = db.prepare("SELECT * FROM sales WHERE id = ?").get(result.lastInsertRowid)
     sendJson(res, 201, newSale)
+    return true
+  }
+
+  // 8. WBS 1.5: Audit Logs (GET / POST)
+  if (pathname === "/api/audit-logs" && method === "GET") {
+    const logs = db.prepare("SELECT * FROM audit_logs ORDER BY id DESC LIMIT 100").all()
+    sendJson(res, 200, logs)
+    return true
+  }
+
+  if (pathname === "/api/audit-logs" && method === "POST") {
+    const { user_name, user_role, action, module, details } = await parseJsonBody(req)
+    const result = db.prepare(
+      "INSERT INTO audit_logs (user_name, user_role, action, module, details) VALUES (?, ?, ?, ?, ?)"
+    ).run(user_name || "Farm Administrator", user_role || "admin", action || "ACTION", module || "System", details || "")
+    const created = db.prepare("SELECT * FROM audit_logs WHERE id = ?").get(result.lastInsertRowid)
+    sendJson(res, 201, created)
+    return true
+  }
+
+  // 9. WBS 2.1: Crop Catalog (GET / POST / DELETE)
+  if (pathname === "/api/crop-catalog" && method === "GET") {
+    sendJson(res, 200, db.prepare("SELECT * FROM crop_catalog ORDER BY name ASC").all())
+    return true
+  }
+
+  if (pathname === "/api/crop-catalog" && method === "POST") {
+    const { name, variety, category, growing_days, ideal_soil } = await parseJsonBody(req)
+    if (!name || !variety) {
+      sendJson(res, 400, { error: "Crop name and variety are required" })
+      return true
+    }
+    const result = db.prepare(
+      "INSERT INTO crop_catalog (name, variety, category, growing_days, ideal_soil) VALUES (?, ?, ?, ?, ?)"
+    ).run(name.trim(), variety.trim(), category || "General Crop", Number(growing_days) || 90, ideal_soil || "")
+    sendJson(res, 201, db.prepare("SELECT * FROM crop_catalog WHERE id = ?").get(result.lastInsertRowid))
+    return true
+  }
+
+  const cropCatMatch = pathname.match(/^\/api\/crop-catalog\/(\d+)$/)
+  if (cropCatMatch && method === "DELETE") {
+    db.prepare("DELETE FROM crop_catalog WHERE id = ?").run(Number(cropCatMatch[1]))
+    sendJson(res, 200, { success: true })
+    return true
+  }
+
+  // 10. WBS 2.2: Fertilizers Master List (GET / POST / DELETE)
+  if (pathname === "/api/fertilizers" && method === "GET") {
+    sendJson(res, 200, db.prepare("SELECT * FROM fertilizers ORDER BY name ASC").all())
+    return true
+  }
+
+  if (pathname === "/api/fertilizers" && method === "POST") {
+    const { name, npk_ratio, type, unit_price, unit } = await parseJsonBody(req)
+    if (!name || !npk_ratio) {
+      sendJson(res, 400, { error: "Fertilizer name and N-P-K ratio are required" })
+      return true
+    }
+    const result = db.prepare(
+      "INSERT INTO fertilizers (name, npk_ratio, type, unit_price, unit) VALUES (?, ?, ?, ?, ?)"
+    ).run(name.trim(), npk_ratio.trim(), type || "Granular", Number(unit_price) || 0, unit || "bag (50kg)")
+    sendJson(res, 201, db.prepare("SELECT * FROM fertilizers WHERE id = ?").get(result.lastInsertRowid))
+    return true
+  }
+
+  const fertMatch = pathname.match(/^\/api\/fertilizers\/(\d+)$/)
+  if (fertMatch && method === "DELETE") {
+    db.prepare("DELETE FROM fertilizers WHERE id = ?").run(Number(fertMatch[1]))
+    sendJson(res, 200, { success: true })
+    return true
+  }
+
+  // 11. WBS 2.3: Customers & Stakeholders Directory (GET / POST / DELETE)
+  if (pathname === "/api/customers" && method === "GET") {
+    sendJson(res, 200, db.prepare("SELECT * FROM customers ORDER BY name ASC").all())
+    return true
+  }
+
+  if (pathname === "/api/customers" && method === "POST") {
+    const { name, contact_person, phone, email, buyer_type, address } = await parseJsonBody(req)
+    if (!name) {
+      sendJson(res, 400, { error: "Customer/Organization name is required" })
+      return true
+    }
+    const result = db.prepare(
+      "INSERT INTO customers (name, contact_person, phone, email, buyer_type, address) VALUES (?, ?, ?, ?, ?, ?)"
+    ).run(name.trim(), contact_person || "", phone || "", email || "", buyer_type || "Wholesaler", address || "")
+    sendJson(res, 201, db.prepare("SELECT * FROM customers WHERE id = ?").get(result.lastInsertRowid))
+    return true
+  }
+
+  const custMatch = pathname.match(/^\/api\/customers\/(\d+)$/)
+  if (custMatch && method === "DELETE") {
+    db.prepare("DELETE FROM customers WHERE id = ?").run(Number(custMatch[1]))
+    sendJson(res, 200, { success: true })
     return true
   }
 

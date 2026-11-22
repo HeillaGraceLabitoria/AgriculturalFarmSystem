@@ -3,6 +3,7 @@ import Login from "@/pages/Login"
 import Dashboard from "@/pages/Dashboard"
 import FarmManagement from "@/pages/FarmManagement"
 import FarmDetails from "@/pages/FarmDetails"
+import MasterData from "@/pages/MasterData"
 
 function App() {
   return (
@@ -12,6 +13,7 @@ function App() {
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/farms" element={<FarmManagement />} />
         <Route path="/farms/:farmId" element={<FarmDetails />} />
+        <Route path="/master-data" element={<MasterData />} />
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>

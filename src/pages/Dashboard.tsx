@@ -135,7 +135,7 @@ export default function Dashboard() {
         </div>
 
         {/* Navigation & User actions */}
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button
             variant="default"
             size="sm"
@@ -144,6 +144,16 @@ export default function Dashboard() {
           >
             <LayoutGrid className="h-4 w-4 text-[#1F2922]" />
             Farm Management
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => navigate("/master-data")}
+            className="border-[#87A987]/50 bg-white/10 text-[#F9FBF7] hover:bg-[#23471E] hover:text-[#F9FBF7] gap-1.5 font-semibold"
+          >
+            <Database className="h-3.5 w-3.5" />
+            Master Catalogs & Audit
           </Button>
 
           <Button

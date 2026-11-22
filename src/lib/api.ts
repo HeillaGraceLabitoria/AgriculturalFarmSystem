@@ -99,6 +99,44 @@ export interface Sale {
   created_at?: string
 }
 
+export interface AuditLog {
+  id: number
+  user_name: string
+  user_role: string
+  action: string
+  module: string
+  details: string
+  created_at: string
+}
+
+export interface CropCatalogItem {
+  id: number
+  name: string
+  variety: string
+  category: string
+  growing_days: number
+  ideal_soil: string
+}
+
+export interface FertilizerItem {
+  id: number
+  name: string
+  npk_ratio: string
+  type: string
+  unit_price: number
+  unit: string
+}
+
+export interface CustomerItem {
+  id: number
+  name: string
+  contact_person: string
+  phone: string
+  email: string
+  buyer_type: string
+  address: string
+}
+
 const API_BASE = import.meta.env.VITE_API_URL || "/api"
 
 export const api = {
@@ -166,7 +204,6 @@ export const api = {
   async getFarmProfile(id: number): Promise<Farm> {
     const res = await fetch(`${API_BASE}/farms/${id}/profile`)
     if (!res.ok) {
-      // Fallback to /farms/${id}
       return this.getFarm(id)
     }
     return await res.json()
@@ -263,5 +300,90 @@ export const api = {
     const res = await fetch(`${API_BASE}/sales`)
     if (!res.ok) throw new Error("Failed to fetch sales")
     return await res.json()
+  },
+
+  async getAuditLogs(): Promise<AuditLog[]> {
+    const res = await fetch(`${API_BASE}/audit-logs`)
+    if (!res.ok) throw new Error("Failed to fetch audit logs")
+    return await res.json()
+  },
+
+  async logAudit(entry: { action: string; module: string; details: string }): Promise<void> {
+    const user = this.getCurrentUser()
+    await fetch(`${API_BASE}/audit-logs`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        user_name: user?.name || "Farm Administrator",
+        user_role: user?.role || "admin",
+        ...entry,
+      }),
+    }).catch(() => {})
+  },
+
+  async getCropCatalog(): Promise<CropCatalogItem[]> {
+    const res = await fetch(`${API_BASE}/crop-catalog`)
+    if (!res.ok) throw new Error("Failed to fetch crop catalog")
+    return await res.json()
+  },
+
+  async createCropCatalog(item: Omit<CropCatalogItem, "id">): Promise<CropCatalogItem> {
+    const res = await fetch(`${API_BASE}/crop-catalog`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(item),
+    })
+    if (!res.ok) throw new Error("Failed to add crop catalog item")
+    await this.logAudit({ action: "CREATE_CROP_REF", module: "WBS 2.1 Crop Catalog", details: `Added ${item.name} (${item.variety})` })
+    return await res.json()
+  },
+
+  async deleteCropCatalog(id: number): Promise<void> {
+    await fetch(`${API_BASE}/crop-catalog/${id}`, { method: "DELETE" })
+    await this.logAudit({ action: "DELETE_CROP_REF", module: "WBS 2.1 Crop Catalog", details: `Removed catalog entry #${id}` })
+  },
+
+  async getFertilizers(): Promise<FertilizerItem[]> {
+    const res = await fetch(`${API_BASE}/fertilizers`)
+    if (!res.ok) throw new Error("Failed to fetch fertilizers")
+    return await res.json()
+  },
+
+  async createFertilizer(item: Omit<FertilizerItem, "id">): Promise<FertilizerItem> {
+    const res = await fetch(`${API_BASE}/fertilizers`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(item),
+    })
+    if (!res.ok) throw new Error("Failed to add fertilizer")
+    await this.logAudit({ action: "CREATE_FERTILIZER", module: "WBS 2.2 Fertilizer Catalog", details: `Added ${item.name} (${item.npk_ratio})` })
+    return await res.json()
+  },
+
+  async deleteFertilizer(id: number): Promise<void> {
+    await fetch(`${API_BASE}/fertilizers/${id}`, { method: "DELETE" })
+    await this.logAudit({ action: "DELETE_FERTILIZER", module: "WBS 2.2 Fertilizer Catalog", details: `Removed fertilizer #${id}` })
+  },
+
+  async getCustomers(): Promise<CustomerItem[]> {
+    const res = await fetch(`${API_BASE}/customers`)
+    if (!res.ok) throw new Error("Failed to fetch customers")
+    return await res.json()
+  },
+
+  async createCustomer(item: Omit<CustomerItem, "id">): Promise<CustomerItem> {
+    const res = await fetch(`${API_BASE}/customers`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(item),
+    })
+    if (!res.ok) throw new Error("Failed to add customer")
+    await this.logAudit({ action: "CREATE_CUSTOMER", module: "WBS 2.3 Stakeholder Directory", details: `Registered ${item.name}` })
+    return await res.json()
+  },
+
+  async deleteCustomer(id: number): Promise<void> {
+    await fetch(`${API_BASE}/customers/${id}`, { method: "DELETE" })
+    await this.logAudit({ action: "DELETE_CUSTOMER", module: "WBS 2.3 Stakeholder Directory", details: `Removed customer #${id}` })
   },
 }
