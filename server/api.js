@@ -86,7 +86,6 @@ export async function handleApiRequest(req, res) {
   }
 
   // 3. Farms: Detail, Sub-fields, and CRUD
-  // GET /api/farms/:id/fields
   const farmFieldsMatch = pathname.match(/^\/api\/farms\/(\d+)\/fields$/)
   if (farmFieldsMatch && method === "GET") {
     const farmId = Number(farmFieldsMatch[1])
@@ -101,7 +100,6 @@ export async function handleApiRequest(req, res) {
     return true
   }
 
-  // GET /api/farms/:id and GET /api/farms/:id/profile
   const farmDetailMatch = pathname.match(/^\/api\/farms\/(\d+)(?:\/profile)?$/)
   if (farmDetailMatch && method === "GET") {
     const farmId = Number(farmDetailMatch[1])
@@ -181,7 +179,6 @@ export async function handleApiRequest(req, res) {
     return true
   }
 
-  // PUT /api/farms/:id
   if (farmDetailMatch && method === "PUT") {
     const farmId = Number(farmDetailMatch[1])
     const { name, location, size_hectares, total_area, description } = await parseJsonBody(req)
@@ -212,7 +209,6 @@ export async function handleApiRequest(req, res) {
     return true
   }
 
-  // DELETE /api/farms/:id
   if (farmDetailMatch && method === "DELETE") {
     const farmId = Number(farmDetailMatch[1])
     db.prepare("DELETE FROM farm_fields WHERE farm_id = ?").run(farmId)
@@ -222,7 +218,6 @@ export async function handleApiRequest(req, res) {
     return true
   }
 
-  // GET /api/farms
   if (pathname === "/api/farms" && method === "GET") {
     const farms = db.prepare(`
       SELECT f.*, 
@@ -237,7 +232,6 @@ export async function handleApiRequest(req, res) {
     return true
   }
 
-  // POST /api/farms
   if (pathname === "/api/farms" && method === "POST") {
     const { name, location, size_hectares, total_area, description } = await parseJsonBody(req)
     if (!name || !location) {
@@ -266,7 +260,6 @@ export async function handleApiRequest(req, res) {
   // 4. Farm Areas / Fields: CRUD
   const fieldDetailMatch = pathname.match(/^\/api\/fields\/(\d+)$/)
 
-  // GET /api/fields
   if (pathname === "/api/fields" && method === "GET") {
     const farmIdQuery = url.searchParams.get("farm_id")
     let fields
@@ -290,7 +283,6 @@ export async function handleApiRequest(req, res) {
     return true
   }
 
-  // POST /api/fields
   if (pathname === "/api/fields" && method === "POST") {
     const { farm_id, name, area, description, status } = await parseJsonBody(req)
     if (!farm_id) {
@@ -330,7 +322,6 @@ export async function handleApiRequest(req, res) {
     return true
   }
 
-  // PUT /api/fields/:id
   if (fieldDetailMatch && method === "PUT") {
     const fieldId = Number(fieldDetailMatch[1])
     const { name, area, description, status } = await parseJsonBody(req)
@@ -363,7 +354,6 @@ export async function handleApiRequest(req, res) {
     return true
   }
 
-  // DELETE /api/fields/:id
   if (fieldDetailMatch && method === "DELETE") {
     const fieldId = Number(fieldDetailMatch[1])
     db.prepare("DELETE FROM farm_fields WHERE id = ?").run(fieldId)
@@ -371,12 +361,13 @@ export async function handleApiRequest(req, res) {
     return true
   }
 
-  // 5. Crops: GET /api/crops, POST /api/crops
+  // 5. Crops (WBS 4.1, 4.2, 4.5): GET / POST / Stage Update / Delete
   if (pathname === "/api/crops" && method === "GET") {
     const crops = db.prepare(`
-      SELECT c.*, f.name as farm_name 
+      SELECT c.*, f.name as farm_name, ff.name as field_name
       FROM crops c 
       LEFT JOIN farms f ON c.farm_id = f.id 
+      LEFT JOIN farm_fields ff ON c.field_id = ff.id
       ORDER BY c.id DESC
     `).all()
     sendJson(res, 200, crops)
@@ -384,14 +375,28 @@ export async function handleApiRequest(req, res) {
   }
 
   if (pathname === "/api/crops" && method === "POST") {
-    const { farm_id, field_id, name, variety, planted_date, expected_harvest_date, status, area_hectares } = await parseJsonBody(req)
+    const {
+      farm_id,
+      field_id,
+      name,
+      variety,
+      planted_date,
+      expected_harvest_date,
+      status,
+      area_hectares,
+      growth_stage,
+      batch_code,
+    } = await parseJsonBody(req)
+
     if (!name || !planted_date) {
       sendJson(res, 400, { error: "Crop name and planted date are required" })
       return true
     }
+
+    const code = batch_code?.trim() || `BATCH-${new Date().getFullYear()}-${Math.floor(100 + Math.random() * 900)}`
     const result = db.prepare(`
-      INSERT INTO crops (farm_id, field_id, name, variety, planted_date, expected_harvest_date, status, area_hectares)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO crops (farm_id, field_id, name, variety, planted_date, expected_harvest_date, status, area_hectares, growth_stage, batch_code)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       farm_id ? Number(farm_id) : null,
       field_id ? Number(field_id) : null,
@@ -400,10 +405,39 @@ export async function handleApiRequest(req, res) {
       planted_date,
       expected_harvest_date || null,
       status || "growing",
-      Number(area_hectares) || 0
+      Number(area_hectares) || 0,
+      growth_stage || "Seedling",
+      code
     )
-    const newCrop = db.prepare("SELECT * FROM crops WHERE id = ?").get(result.lastInsertRowid)
+    const newCrop = db.prepare(`
+      SELECT c.*, f.name as farm_name, ff.name as field_name
+      FROM crops c
+      LEFT JOIN farms f ON c.farm_id = f.id
+      LEFT JOIN farm_fields ff ON c.field_id = ff.id
+      WHERE c.id = ?
+    `).get(result.lastInsertRowid)
     sendJson(res, 201, newCrop)
+    return true
+  }
+
+  const cropStageMatch = pathname.match(/^\/api\/crops\/(\d+)\/stage$/)
+  if (cropStageMatch && method === "PUT") {
+    const cropId = Number(cropStageMatch[1])
+    const { growth_stage, status } = await parseJsonBody(req)
+    const derivedStatus = growth_stage === "Harvested" ? "harvested" : status || "growing"
+    db.prepare("UPDATE crops SET growth_stage = COALESCE(?, growth_stage), status = ? WHERE id = ?").run(
+      growth_stage || null,
+      derivedStatus,
+      cropId
+    )
+    sendJson(res, 200, db.prepare("SELECT * FROM crops WHERE id = ?").get(cropId))
+    return true
+  }
+
+  const cropIdMatch = pathname.match(/^\/api\/crops\/(\d+)$/)
+  if (cropIdMatch && method === "DELETE") {
+    db.prepare("DELETE FROM crops WHERE id = ?").run(Number(cropIdMatch[1]))
+    sendJson(res, 200, { success: true })
     return true
   }
 
@@ -567,6 +601,122 @@ export async function handleApiRequest(req, res) {
   const custMatch = pathname.match(/^\/api\/customers\/(\d+)$/)
   if (custMatch && method === "DELETE") {
     db.prepare("DELETE FROM customers WHERE id = ?").run(Number(custMatch[1]))
+    sendJson(res, 200, { success: true })
+    return true
+  }
+
+  // 12. WBS 4.3: Field Activities & Labor Logs (GET / POST / DELETE)
+  if (pathname === "/api/field-activities" && method === "GET") {
+    const rows = db.prepare(`
+      SELECT fa.*, f.name as farm_name, ff.name as field_name, c.name as crop_name
+      FROM field_activities fa
+      LEFT JOIN farms f ON fa.farm_id = f.id
+      LEFT JOIN farm_fields ff ON fa.field_id = ff.id
+      LEFT JOIN crops c ON fa.crop_id = c.id
+      ORDER BY fa.activity_date DESC, fa.id DESC
+    `).all()
+    sendJson(res, 200, rows)
+    return true
+  }
+
+  if (pathname === "/api/field-activities" && method === "POST") {
+    const { farm_id, field_id, crop_id, activity_type, activity_date, worker_name, hours_worked, labor_cost, notes } = await parseJsonBody(req)
+    if (!activity_type || !activity_date || !worker_name) {
+      sendJson(res, 400, { error: "Activity type, date, and worker name are required" })
+      return true
+    }
+    const result = db.prepare(`
+      INSERT INTO field_activities (farm_id, field_id, crop_id, activity_type, activity_date, worker_name, hours_worked, labor_cost, notes)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      farm_id ? Number(farm_id) : null,
+      field_id ? Number(field_id) : null,
+      crop_id ? Number(crop_id) : null,
+      activity_type,
+      activity_date,
+      worker_name.trim(),
+      Number(hours_worked) || 0,
+      Number(labor_cost) || 0,
+      notes || null
+    )
+    sendJson(res, 201, db.prepare("SELECT * FROM field_activities WHERE id = ?").get(result.lastInsertRowid))
+    return true
+  }
+
+  const activityMatch = pathname.match(/^\/api\/field-activities\/(\d+)$/)
+  if (activityMatch && method === "DELETE") {
+    db.prepare("DELETE FROM field_activities WHERE id = ?").run(Number(activityMatch[1]))
+    sendJson(res, 200, { success: true })
+    return true
+  }
+
+  // 13. WBS 4.4: Fertilizer Applications & Dosage Calculator (GET / POST / DELETE)
+  if (pathname === "/api/fertilizer-applications" && method === "GET") {
+    const rows = db.prepare(`
+      SELECT fa.*, f.name as farm_name, ff.name as field_name, c.name as crop_name
+      FROM fertilizer_applications fa
+      LEFT JOIN farms f ON fa.farm_id = f.id
+      LEFT JOIN farm_fields ff ON fa.field_id = ff.id
+      LEFT JOIN crops c ON fa.crop_id = c.id
+      ORDER BY fa.application_date DESC, fa.id DESC
+    `).all()
+    sendJson(res, 200, rows)
+    return true
+  }
+
+  if (pathname === "/api/fertilizer-applications" && method === "POST") {
+    const {
+      farm_id,
+      field_id,
+      crop_id,
+      fertilizer_id,
+      fertilizer_name,
+      npk_ratio,
+      application_date,
+      area_hectares,
+      dosage_per_ha,
+      unit_price,
+      notes,
+    } = await parseJsonBody(req)
+
+    if (!fertilizer_name || !application_date) {
+      sendJson(res, 400, { error: "Fertilizer and application date are required" })
+      return true
+    }
+
+    const area = Number(area_hectares) || 0
+    const dosage = Number(dosage_per_ha) || 0
+    const price = Number(unit_price) || 0
+    const totalUnits = Number((area * dosage).toFixed(2))
+    const totalCost = Number((totalUnits * price).toFixed(2))
+
+    const result = db.prepare(`
+      INSERT INTO fertilizer_applications (
+        farm_id, field_id, crop_id, fertilizer_id, fertilizer_name, npk_ratio,
+        application_date, area_hectares, dosage_per_ha, total_units, unit_price, total_cost, notes
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      farm_id ? Number(farm_id) : null,
+      field_id ? Number(field_id) : null,
+      crop_id ? Number(crop_id) : null,
+      fertilizer_id ? Number(fertilizer_id) : null,
+      fertilizer_name,
+      npk_ratio || "",
+      application_date,
+      area,
+      dosage,
+      totalUnits,
+      price,
+      totalCost,
+      notes || null
+    )
+    sendJson(res, 201, db.prepare("SELECT * FROM fertilizer_applications WHERE id = ?").get(result.lastInsertRowid))
+    return true
+  }
+
+  const fertAppMatch = pathname.match(/^\/api\/fertilizer-applications\/(\d+)$/)
+  if (fertAppMatch && method === "DELETE") {
+    db.prepare("DELETE FROM fertilizer_applications WHERE id = ?").run(Number(fertAppMatch[1]))
     sendJson(res, 200, { success: true })
     return true
   }

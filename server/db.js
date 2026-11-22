@@ -122,9 +122,43 @@ export function initDatabase() {
       address TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+
+    -- WBS 4.3: Field Activity & Labor Operation Logs
+    CREATE TABLE IF NOT EXISTS field_activities (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      farm_id INTEGER REFERENCES farms(id) ON DELETE CASCADE,
+      field_id INTEGER REFERENCES farm_fields(id) ON DELETE SET NULL,
+      crop_id INTEGER REFERENCES crops(id) ON DELETE SET NULL,
+      activity_type TEXT NOT NULL,
+      activity_date TEXT NOT NULL,
+      worker_name TEXT NOT NULL,
+      hours_worked REAL NOT NULL DEFAULT 0,
+      labor_cost REAL NOT NULL DEFAULT 0,
+      notes TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- WBS 4.4: Fertilizer Application, Dosage & Cost Tracking
+    CREATE TABLE IF NOT EXISTS fertilizer_applications (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      farm_id INTEGER REFERENCES farms(id) ON DELETE CASCADE,
+      field_id INTEGER REFERENCES farm_fields(id) ON DELETE SET NULL,
+      crop_id INTEGER REFERENCES crops(id) ON DELETE SET NULL,
+      fertilizer_id INTEGER REFERENCES fertilizers(id) ON DELETE SET NULL,
+      fertilizer_name TEXT NOT NULL,
+      npk_ratio TEXT,
+      application_date TEXT NOT NULL,
+      area_hectares REAL NOT NULL DEFAULT 0,
+      dosage_per_ha REAL NOT NULL DEFAULT 0,
+      total_units REAL NOT NULL DEFAULT 0,
+      unit_price REAL NOT NULL DEFAULT 0,
+      total_cost REAL NOT NULL DEFAULT 0,
+      notes TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
   `)
 
-  // Ensure 'description' and 'status' columns exist in 'farms' table for existing databases
+  // Ensure 'description' and 'status' columns exist in 'farms' table
   const farmCols = db.prepare("PRAGMA table_info(farms)").all()
   if (!farmCols.some((c) => c.name === "description")) {
     db.exec("ALTER TABLE farms ADD COLUMN description TEXT")
@@ -133,10 +167,16 @@ export function initDatabase() {
     db.exec("ALTER TABLE farms ADD COLUMN status TEXT DEFAULT 'Active'")
   }
 
-  // Ensure 'field_id' column exists in 'crops' table
+  // Ensure 'field_id', 'growth_stage', and 'batch_code' columns exist in 'crops' table
   const cropCols = db.prepare("PRAGMA table_info(crops)").all()
   if (!cropCols.some((c) => c.name === "field_id")) {
     db.exec("ALTER TABLE crops ADD COLUMN field_id INTEGER REFERENCES farm_fields(id)")
+  }
+  if (!cropCols.some((c) => c.name === "growth_stage")) {
+    db.exec("ALTER TABLE crops ADD COLUMN growth_stage TEXT DEFAULT 'Vegetative'")
+  }
+  if (!cropCols.some((c) => c.name === "batch_code")) {
+    db.exec("ALTER TABLE crops ADD COLUMN batch_code TEXT")
   }
 
   // Ensure 'farm_id' and 'field_id' columns exist in 'harvests' table
@@ -168,7 +208,7 @@ export function initDatabase() {
     // Non-blocking
   }
 
-  // Link default crops to fields if unassigned
+  // Link default crops to fields and batch codes if unassigned
   try {
     const linkCropField = db.prepare("UPDATE crops SET field_id = ? WHERE id = ? AND field_id IS NULL")
     linkCropField.run(1, 1)
@@ -180,6 +220,8 @@ export function initDatabase() {
     linkCropField.run(7, 7)
     linkCropField.run(8, 8)
     linkCropField.run(9, 9)
+    db.prepare("UPDATE crops SET batch_code = 'BATCH-2026-' || printf('%03d', id) WHERE batch_code IS NULL").run()
+    db.prepare("UPDATE crops SET growth_stage = 'Harvested' WHERE status = 'harvested' AND (growth_stage IS NULL OR growth_stage = 'Vegetative')").run()
   } catch {
     // Non-blocking
   }
@@ -232,21 +274,21 @@ export function initDatabase() {
     insertFarm.run("Mindanao Citrus & Palm", "Davao del Norte, Region XI", 35.0, "Export-grade tropical fruit plantation and agro-forestry development.")
 
     const insertCrop = db.prepare(`
-      INSERT INTO crops (farm_id, name, variety, planted_date, expected_harvest_date, status, area_hectares)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO crops (farm_id, name, variety, planted_date, expected_harvest_date, status, area_hectares, growth_stage, batch_code)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
-    insertCrop.run(1, "Rice", "Jasmine RC222", "2026-06-15", "2026-10-20", "growing", 6.0)
-    insertCrop.run(1, "Corn", "Hybrid Yellow", "2026-07-01", "2026-10-15", "growing", 4.5)
-    insertCrop.run(1, "Tomato", "Diamante Max", "2026-08-10", "2026-11-05", "growing", 2.0)
-    insertCrop.run(2, "Rice", "NSIC Rc160", "2026-06-01", "2026-09-30", "harvested", 12.0)
-    insertCrop.run(2, "White Corn", "Sweet Pearl", "2026-07-15", "2026-10-25", "growing", 8.0)
-    insertCrop.run(2, "Sugarcane", "Phil 2006-2282", "2026-01-10", "2026-12-15", "growing", 6.0)
-    insertCrop.run(3, "Cabbage", "Rare Ball", "2026-08-01", "2026-10-18", "growing", 2.5)
-    insertCrop.run(3, "Carrots", "Kuroda", "2026-07-20", "2026-10-30", "growing", 2.2)
-    insertCrop.run(3, "Bell Pepper", "Red Baron", "2026-08-15", "2026-11-20", "growing", 1.8)
-    insertCrop.run(4, "Banana", "Cavendish", "2025-09-10", "2026-10-01", "harvested", 15.0)
-    insertCrop.run(4, "Calamansi", "Native Green", "2025-05-15", "2026-10-10", "growing", 10.0)
-    insertCrop.run(4, "Cassava", "Lakan 1", "2026-02-10", "2026-11-15", "growing", 8.0)
+    insertCrop.run(1, "Rice", "Jasmine RC222", "2026-06-15", "2026-10-20", "growing", 6.0, "Flowering", "BATCH-2026-001")
+    insertCrop.run(1, "Corn", "Hybrid Yellow", "2026-07-01", "2026-10-15", "growing", 4.5, "Ready for Harvest", "BATCH-2026-002")
+    insertCrop.run(1, "Tomato", "Diamante Max", "2026-08-10", "2026-11-05", "growing", 2.0, "Vegetative", "BATCH-2026-003")
+    insertCrop.run(2, "Rice", "NSIC Rc160", "2026-06-01", "2026-09-30", "harvested", 12.0, "Harvested", "BATCH-2026-004")
+    insertCrop.run(2, "White Corn", "Sweet Pearl", "2026-07-15", "2026-10-25", "growing", 8.0, "Flowering", "BATCH-2026-005")
+    insertCrop.run(2, "Sugarcane", "Phil 2006-2282", "2026-01-10", "2026-12-15", "growing", 6.0, "Vegetative", "BATCH-2026-006")
+    insertCrop.run(3, "Cabbage", "Rare Ball", "2026-08-01", "2026-10-18", "growing", 2.5, "Ready for Harvest", "BATCH-2026-007")
+    insertCrop.run(3, "Carrots", "Kuroda", "2026-07-20", "2026-10-30", "growing", 2.2, "Vegetative", "BATCH-2026-008")
+    insertCrop.run(3, "Bell Pepper", "Red Baron", "2026-08-15", "2026-11-20", "growing", 1.8, "Seedling", "BATCH-2026-009")
+    insertCrop.run(4, "Banana", "Cavendish", "2025-09-10", "2026-10-01", "harvested", 15.0, "Harvested", "BATCH-2026-010")
+    insertCrop.run(4, "Calamansi", "Native Green", "2025-05-15", "2026-10-10", "growing", 10.0, "Flowering", "BATCH-2026-011")
+    insertCrop.run(4, "Cassava", "Lakan 1", "2026-02-10", "2026-11-15", "growing", 8.0, "Vegetative", "BATCH-2026-012")
 
     const insertHarvest = db.prepare(`
       INSERT INTO harvests (crop_id, crop_name, farm_name, harvest_date, quantity_kg, quality_grade, notes)
@@ -331,5 +373,23 @@ export function initDatabase() {
       "Foundation & Security",
       "Initialized database schema, RBAC roles, and master reference catalogs"
     )
+  }
+
+  // Seed WBS 4.3 Field Activities
+  if (db.prepare("SELECT COUNT(*) as count FROM field_activities").get().count === 0) {
+    const insAct = db.prepare(
+      "INSERT INTO field_activities (farm_id, field_id, crop_id, activity_type, activity_date, worker_name, hours_worked, labor_cost, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    )
+    insAct.run(1, 1, 1, "Irrigation & Water Level Check", "2026-11-18", "Juan Dela Cruz", 6, 900, "Maintained 5cm paddy water depth")
+    insAct.run(2, 5, 5, "Manual Weeding & Hilling-Up", "2026-11-20", "Field Operations Staff", 8, 1200, "Cleared inter-row weeds in Sector 2 West")
+  }
+
+  // Seed WBS 4.4 Fertilizer Applications
+  if (db.prepare("SELECT COUNT(*) as count FROM fertilizer_applications").get().count === 0) {
+    const insApp = db.prepare(
+      "INSERT INTO fertilizer_applications (farm_id, field_id, crop_id, fertilizer_id, fertilizer_name, npk_ratio, application_date, area_hectares, dosage_per_ha, total_units, unit_price, total_cost, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    )
+    insApp.run(1, 1, 1, 1, "Complete Fertilizer (Triple 14)", "14-14-14", "2026-11-15", 6.0, 4.0, 24.0, 1450, 34800, "Basal application for Jasmine RC222")
+    insApp.run(1, 2, 2, 2, "Urea (46-0-0)", "46-0-0", "2026-11-19", 4.5, 3.0, 13.5, 1380, 18630, "Side-dress nitrogen boost for Hybrid Yellow Corn")
   }
 }

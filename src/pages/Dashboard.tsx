@@ -149,6 +149,16 @@ export default function Dashboard() {
           <Button
             variant="outline"
             size="sm"
+            onClick={() => navigate("/operations")}
+            className="border-[#87A987]/50 bg-white/10 text-[#F9FBF7] hover:bg-[#23471E] hover:text-[#F9FBF7] gap-1.5 font-semibold"
+          >
+            <Sprout className="h-3.5 w-3.5" />
+            Field Operations
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
             onClick={() => navigate("/master-data")}
             className="border-[#87A987]/50 bg-white/10 text-[#F9FBF7] hover:bg-[#23471E] hover:text-[#F9FBF7] gap-1.5 font-semibold"
           >

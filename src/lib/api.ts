@@ -54,6 +54,8 @@ export interface Farm {
   created_at?: string
 }
 
+export type GrowthStage = "Planned" | "Seedling" | "Vegetative" | "Flowering" | "Ready for Harvest" | "Harvested"
+
 export interface Crop {
   id: number
   farm_id: number
@@ -65,6 +67,8 @@ export interface Crop {
   planted_date: string
   expected_harvest_date?: string
   status: "growing" | "harvested" | "planned"
+  growth_stage?: GrowthStage
+  batch_code?: string
   area_hectares: number
   created_at?: string
 }
@@ -135,6 +139,42 @@ export interface CustomerItem {
   email: string
   buyer_type: string
   address: string
+}
+
+export interface FieldActivity {
+  id: number
+  farm_id?: number
+  farm_name?: string
+  field_id?: number
+  field_name?: string
+  crop_id?: number
+  crop_name?: string
+  activity_type: string
+  activity_date: string
+  worker_name: string
+  hours_worked: number
+  labor_cost: number
+  notes?: string
+}
+
+export interface FertilizerApplication {
+  id: number
+  farm_id?: number
+  farm_name?: string
+  field_id?: number
+  field_name?: string
+  crop_id?: number
+  crop_name?: string
+  fertilizer_id?: number
+  fertilizer_name: string
+  npk_ratio?: string
+  application_date: string
+  area_hectares: number
+  dosage_per_ha: number
+  total_units: number
+  unit_price: number
+  total_cost: number
+  notes?: string
 }
 
 const API_BASE = import.meta.env.VITE_API_URL || "/api"
@@ -290,6 +330,59 @@ export const api = {
     return await res.json()
   },
 
+  async createCrop(crop: {
+    farm_id?: number
+    field_id?: number
+    name: string
+    variety?: string
+    planted_date: string
+    expected_harvest_date?: string
+    status?: "growing" | "harvested" | "planned"
+    area_hectares: number
+    growth_stage?: GrowthStage
+    batch_code?: string
+  }): Promise<Crop> {
+    const res = await fetch(`${API_BASE}/crops`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(crop),
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err.error || "Failed to register planting batch")
+    }
+    await this.logAudit({
+      action: "CREATE_PLANTING",
+      module: "WBS 4.1–4.2 Field Operations",
+      details: `Planted ${crop.name} (${crop.variety || "Standard"}) on ${crop.area_hectares} ha`,
+    })
+    return await res.json()
+  },
+
+  async updateCropStage(id: number, growth_stage: GrowthStage): Promise<Crop> {
+    const res = await fetch(`${API_BASE}/crops/${id}/stage`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ growth_stage }),
+    })
+    if (!res.ok) throw new Error("Failed to update growth stage")
+    await this.logAudit({
+      action: "UPDATE_STAGE",
+      module: "WBS 4.5 Growth Monitoring",
+      details: `Updated crop batch #${id} stage to ${growth_stage}`,
+    })
+    return await res.json()
+  },
+
+  async deleteCrop(id: number): Promise<void> {
+    await fetch(`${API_BASE}/crops/${id}`, { method: "DELETE" })
+    await this.logAudit({
+      action: "DELETE_CROP",
+      module: "WBS 4.1 Crop Operations",
+      details: `Removed crop batch #${id}`,
+    })
+  },
+
   async getHarvests(): Promise<Harvest[]> {
     const res = await fetch(`${API_BASE}/harvests`)
     if (!res.ok) throw new Error("Failed to fetch harvests")
@@ -385,5 +478,77 @@ export const api = {
   async deleteCustomer(id: number): Promise<void> {
     await fetch(`${API_BASE}/customers/${id}`, { method: "DELETE" })
     await this.logAudit({ action: "DELETE_CUSTOMER", module: "WBS 2.3 Stakeholder Directory", details: `Removed customer #${id}` })
+  },
+
+  async getFieldActivities(): Promise<FieldActivity[]> {
+    const res = await fetch(`${API_BASE}/field-activities`)
+    if (!res.ok) throw new Error("Failed to fetch field activities")
+    return await res.json()
+  },
+
+  async createFieldActivity(item: {
+    farm_id?: number
+    field_id?: number
+    crop_id?: number
+    activity_type: string
+    activity_date: string
+    worker_name: string
+    hours_worked: number
+    labor_cost: number
+    notes?: string
+  }): Promise<FieldActivity> {
+    const res = await fetch(`${API_BASE}/field-activities`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(item),
+    })
+    if (!res.ok) throw new Error("Failed to log field activity")
+    await this.logAudit({
+      action: "LOG_FIELD_ACTIVITY",
+      module: "WBS 4.3 Labor & Operations",
+      details: `${item.activity_type} by ${item.worker_name} (${item.hours_worked} hrs)`,
+    })
+    return await res.json()
+  },
+
+  async deleteFieldActivity(id: number): Promise<void> {
+    await fetch(`${API_BASE}/field-activities/${id}`, { method: "DELETE" })
+  },
+
+  async getFertilizerApplications(): Promise<FertilizerApplication[]> {
+    const res = await fetch(`${API_BASE}/fertilizer-applications`)
+    if (!res.ok) throw new Error("Failed to fetch fertilizer applications")
+    return await res.json()
+  },
+
+  async createFertilizerApplication(item: {
+    farm_id?: number
+    field_id?: number
+    crop_id?: number
+    fertilizer_id?: number
+    fertilizer_name: string
+    npk_ratio?: string
+    application_date: string
+    area_hectares: number
+    dosage_per_ha: number
+    unit_price: number
+    notes?: string
+  }): Promise<FertilizerApplication> {
+    const res = await fetch(`${API_BASE}/fertilizer-applications`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(item),
+    })
+    if (!res.ok) throw new Error("Failed to record fertilizer application")
+    await this.logAudit({
+      action: "LOG_FERTILIZER_APP",
+      module: "WBS 4.4 Fertilizer Dosage",
+      details: `Applied ${item.fertilizer_name} (${item.dosage_per_ha} bags/ha across ${item.area_hectares} ha)`,
+    })
+    return await res.json()
+  },
+
+  async deleteFertilizerApplication(id: number): Promise<void> {
+    await fetch(`${API_BASE}/fertilizer-applications/${id}`, { method: "DELETE" })
   },
 }
