@@ -301,38 +301,31 @@ export default function FieldOperations() {
                     </select>
                   </div>
 
-                  <div>
+                 <div>
                     <Label className="text-xs">Assign Field / Plot</Label>
-                    <select
-                      className="w-full h-9 rounded-md border border-[#D8E2DC] bg-white px-3 text-sm"
-                      value={plantForm.field_id}
-                      onChange={(e) => setPlantForm({ ...plantForm, field_id: e.target.value })}
-                    >
-                      <option value="">-- Choose Plot (Optional) --</option>
-                      {fields
-                        .filter((fld) => !plantForm.farm_id || String(fld.farm_id) === plantForm.farm_id)
-                        .map((fld) => (
-                          <option key={fld.id} value={fld.id}>{fld.name} ({fld.area} ha)</option>
-                        ))}
-                    </select>
+                    {(() => {
+                      const farmPlots = fields.filter(
+                        (fld) => !plantForm.farm_id || String(fld.farm_id) === plantForm.farm_id
+                      )
+                      return (
+                        <select
+                          className="w-full h-9 rounded-md border border-[#D8E2DC] bg-white px-3 text-sm"
+                          value={plantForm.field_id}
+                          onChange={(e) => setPlantForm({ ...plantForm, field_id: e.target.value })}
+                        >
+                          <option value="">
+                            {plantForm.farm_id && farmPlots.length === 0
+                              ? "-- No plots registered for this farm yet (Optional) --"
+                              : "-- Choose Plot (Optional) --"}
+                          </option>
+                          {farmPlots.map((fld) => (
+                            <option key={fld.id} value={fld.id}>{fld.name} ({fld.area} ha)</option>
+                          ))}
+                        </select>
+                      )
+                    })()}
                   </div>
-
-                  <div>
-                    <Label className="text-xs">Quick-Fill from Crop Catalog</Label>
-                    <select
-                      className="w-full h-9 rounded-md border border-[#D8E2DC] bg-white px-3 text-sm"
-                      value={plantForm.catalog_id}
-                      onChange={(e) => handleCatalogSelect(e.target.value)}
-                    >
-                      <option value="">-- Select Catalog Variety --</option>
-                      {catalog.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name} - {c.variety} ({c.growing_days} days)
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
+                  
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <Label className="text-xs">Crop Name</Label>

@@ -347,6 +347,12 @@ export function initDatabase() {
       insertField.run(highland.id, "Root Crop Zone", 2.2, "Rich volcanic soil plot for organic carrots", "Active")
       insertField.run(highland.id, "Covered Garden 1", 1.8, "UV-filtered polyhouse for bell peppers", "Prepared")
     }
+    const mindanao = db.prepare("SELECT id FROM farms WHERE name LIKE '%Mindanao Citrus%'").get()
+    if (mindanao) {
+      insertField.run(mindanao.id, "Banana Plantation Block 1", 15.0, "Export Cavendish cultivation zone with drip irrigation", "Planted")
+      insertField.run(mindanao.id, "Calamansi Orchard North", 10.0, "Citrus grove section with windbreak trees", "Active")
+      insertField.run(mindanao.id, "Cassava Agro-Forest Plot", 8.0, "High-yield root crop upland block", "Active")
+    }
   }
 
   // Seed Crop Catalog
