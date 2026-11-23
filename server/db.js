@@ -74,11 +74,14 @@ export function initDatabase() {
       quantity_kg REAL NOT NULL,
       price_per_kg REAL NOT NULL,
       total_amount REAL NOT NULL,
+      amount_paid REAL DEFAULT 0,
+      balance REAL DEFAULT 0,
+      payment_method TEXT DEFAULT 'Cash',
       payment_status TEXT NOT NULL DEFAULT 'paid',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
-    -- WBS 1.5: System-wide Audit Logging
+    -- System-wide Audit Logging
     CREATE TABLE IF NOT EXISTS audit_logs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_name TEXT NOT NULL,
@@ -89,7 +92,7 @@ export function initDatabase() {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
-    -- WBS 2.1: Crop Classification & Growing Periods Reference Catalog
+    -- Crop Classification & Growing Periods Reference Catalog
     CREATE TABLE IF NOT EXISTS crop_catalog (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
@@ -100,7 +103,7 @@ export function initDatabase() {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
-    -- WBS 2.2: Shared Fertilizer Master List & N-P-K Catalog
+    -- Shared Fertilizer Master List & N-P-K Catalog
     CREATE TABLE IF NOT EXISTS fertilizers (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
@@ -111,7 +114,7 @@ export function initDatabase() {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
-    -- WBS 2.3: Customer & Stakeholder Directory
+    -- Customer & Stakeholder Directory
     CREATE TABLE IF NOT EXISTS customers (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
@@ -123,7 +126,7 @@ export function initDatabase() {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
-    -- WBS 4.3: Field Activity & Labor Operation Logs
+    -- Field Activity & Labor Operation Logs
     CREATE TABLE IF NOT EXISTS field_activities (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       farm_id INTEGER REFERENCES farms(id) ON DELETE CASCADE,
@@ -138,7 +141,7 @@ export function initDatabase() {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
-    -- WBS 4.4: Fertilizer Application, Dosage & Cost Tracking
+    -- Fertilizer Application, Dosage & Cost Tracking
     CREATE TABLE IF NOT EXISTS fertilizer_applications (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       farm_id INTEGER REFERENCES farms(id) ON DELETE CASCADE,
@@ -188,7 +191,7 @@ export function initDatabase() {
     db.exec("ALTER TABLE harvests ADD COLUMN field_id INTEGER REFERENCES farm_fields(id)")
   }
 
-  // Ensure 'farm_id' and 'harvest_id' columns exist in 'sales' table
+  // Ensure 'farm_id', 'harvest_id', 'amount_paid', 'balance', and 'payment_method' columns exist in 'sales' table
   const saleCols = db.prepare("PRAGMA table_info(sales)").all()
   if (!saleCols.some((c) => c.name === "farm_id")) {
     db.exec("ALTER TABLE sales ADD COLUMN farm_id INTEGER REFERENCES farms(id)")
@@ -196,6 +199,16 @@ export function initDatabase() {
   if (!saleCols.some((c) => c.name === "harvest_id")) {
     db.exec("ALTER TABLE sales ADD COLUMN harvest_id INTEGER REFERENCES harvests(id)")
   }
+  if (!saleCols.some((c) => c.name === "amount_paid")) {
+    db.exec("ALTER TABLE sales ADD COLUMN amount_paid REAL DEFAULT 0")
+  }
+  if (!saleCols.some((c) => c.name === "balance")) {
+    db.exec("ALTER TABLE sales ADD COLUMN balance REAL DEFAULT 0")
+  }
+  if (!saleCols.some((c) => c.name === "payment_method")) {
+    db.exec("ALTER TABLE sales ADD COLUMN payment_method TEXT DEFAULT 'Cash'")
+  }
+  db.exec("UPDATE sales SET amount_paid = total_amount, balance = 0 WHERE payment_status = 'paid' AND (amount_paid IS NULL OR amount_paid = 0)")
 
   // Populate default farm descriptions if missing
   try {
@@ -253,7 +266,7 @@ export function initDatabase() {
     `).run("Farm Administrator", "admin@farm.com", "admin123", "admin")
   }
 
-  // Seed WBS 1.4 additional role account (Field Worker)
+  // Seed additional role account (Field Worker)
   const workerExists = db.prepare("SELECT id FROM users WHERE email = ?").get("worker@farm.com")
   if (!workerExists) {
     db.prepare("INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)").run(
@@ -291,19 +304,19 @@ export function initDatabase() {
     insertCrop.run(4, "Cassava", "Lakan 1", "2026-02-10", "2026-11-15", "growing", 8.0, "Vegetative", "BATCH-2026-012")
 
     const insertHarvest = db.prepare(`
-      INSERT INTO harvests (crop_id, crop_name, farm_name, harvest_date, quantity_kg, quality_grade, notes)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO harvests (crop_id, crop_name, farm_id, farm_name, harvest_date, quantity_kg, quality_grade, notes)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `)
-    insertHarvest.run(4, "Rice (NSIC Rc160)", "Sunrise Plains Farm", "2026-09-30", 12500, "A", "First batch premium yield")
-    insertHarvest.run(10, "Banana (Cavendish)", "Mindanao Citrus & Palm", "2026-10-01", 5950, "A", "Export quality harvest")
+    insertHarvest.run(4, "Rice (NSIC Rc160)", 2, "Sunrise Plains Farm", "2026-09-30", 12500, "A", "First batch premium yield")
+    insertHarvest.run(10, "Banana (Cavendish)", 4, "Mindanao Citrus & Palm", "2026-10-01", 5950, "A", "Export quality harvest")
 
     const insertSale = db.prepare(`
-      INSERT INTO sales (crop_name, buyer_name, sale_date, quantity_kg, price_per_kg, total_amount, payment_status)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO sales (farm_id, harvest_id, crop_name, buyer_name, sale_date, quantity_kg, price_per_kg, total_amount, amount_paid, balance, payment_method, payment_status)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
-    insertSale.run("Rice (NSIC Rc160)", "National Food Authority / Regional Grain Trading", "2026-10-02", 12500, 24.50, 306250.00, "paid")
-    insertSale.run("Banana (Cavendish)", "Davao Fresh Produce Trading Corp", "2026-10-03", 5950, 30.00, 178500.00, "paid")
-    insertSale.run("Organic Vegetables Sample", "Benguet Agri-Hub Coop", "2026-10-04", 50, 10.00, 500.00, "paid")
+    insertSale.run(2, 1, "Rice (NSIC Rc160)", "National Food Authority / Regional Grain Trading", "2026-10-02", 12500, 24.50, 306250.00, 306250.00, 0, "Bank Transfer", "paid")
+    insertSale.run(4, 2, "Banana (Cavendish)", "Davao Fresh Produce Trading Corp", "2026-10-03", 5950, 30.00, 178500.00, 178500.00, 0, "Bank Transfer", "paid")
+    insertSale.run(3, null, "Organic Vegetables Sample", "Benguet Agri-Hub Coop", "2026-10-04", 50, 10.00, 500.00, 500.00, 0, "Cash", "paid")
   }
 
   // Seed default fields if farm_fields is empty
@@ -336,7 +349,7 @@ export function initDatabase() {
     }
   }
 
-  // Seed WBS 2.1 Crop Catalog
+  // Seed Crop Catalog
   if (db.prepare("SELECT COUNT(*) as count FROM crop_catalog").get().count === 0) {
     const insCat = db.prepare("INSERT INTO crop_catalog (name, variety, category, growing_days, ideal_soil) VALUES (?, ?, ?, ?, ?)")
     insCat.run("Rice", "Jasmine RC222", "Cereal Grain", 115, "Clay Loam / Irrigated Paddy")
@@ -347,7 +360,7 @@ export function initDatabase() {
     insCat.run("Banana", "Cavendish", "Tropical Fruit", 270, "Deep Silty Loam")
   }
 
-  // Seed WBS 2.2 Fertilizers
+  // Seed Fertilizers
   if (db.prepare("SELECT COUNT(*) as count FROM fertilizers").get().count === 0) {
     const insFert = db.prepare("INSERT INTO fertilizers (name, npk_ratio, type, unit_price, unit) VALUES (?, ?, ?, ?, ?)")
     insFert.run("Complete Fertilizer (Triple 14)", "14-14-14", "Synthetic Granular", 1450.0, "bag (50kg)")
@@ -356,7 +369,7 @@ export function initDatabase() {
     insFert.run("Vermicompost Organic", "2-1-1", "Organic Soil Conditioner", 450.0, "sack (40kg)")
   }
 
-  // Seed WBS 2.3 Customers
+  // Seed Customers
   if (db.prepare("SELECT COUNT(*) as count FROM customers").get().count === 0) {
     const insCust = db.prepare("INSERT INTO customers (name, contact_person, phone, email, buyer_type, address) VALUES (?, ?, ?, ?, ?, ?)")
     insCust.run("National Food Authority / Regional Grain Trading", "Engr. Roberto Reyes", "0917-555-0192", "procurement@nfa-region2.gov.ph", "Government Agency", "Bayombong, Nueva Vizcaya")
@@ -364,7 +377,7 @@ export function initDatabase() {
     insCust.run("Benguet Agri-Hub Coop", "Mario Dawang", "0920-771-3304", "coop@benguetagri.org", "Cooperative", "La Trinidad, Benguet")
   }
 
-  // Seed initial WBS 1.5 Audit Log
+  // Seed initial Audit Log
   if (db.prepare("SELECT COUNT(*) as count FROM audit_logs").get().count === 0) {
     db.prepare("INSERT INTO audit_logs (user_name, user_role, action, module, details) VALUES (?, ?, ?, ?, ?)").run(
       "Farm Administrator",
@@ -375,7 +388,7 @@ export function initDatabase() {
     )
   }
 
-  // Seed WBS 4.3 Field Activities
+  // Seed Field Activities
   if (db.prepare("SELECT COUNT(*) as count FROM field_activities").get().count === 0) {
     const insAct = db.prepare(
       "INSERT INTO field_activities (farm_id, field_id, crop_id, activity_type, activity_date, worker_name, hours_worked, labor_cost, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
@@ -384,7 +397,7 @@ export function initDatabase() {
     insAct.run(2, 5, 5, "Manual Weeding & Hilling-Up", "2026-11-20", "Field Operations Staff", 8, 1200, "Cleared inter-row weeds in Sector 2 West")
   }
 
-  // Seed WBS 4.4 Fertilizer Applications
+  // Seed Fertilizer Applications
   if (db.prepare("SELECT COUNT(*) as count FROM fertilizer_applications").get().count === 0) {
     const insApp = db.prepare(
       "INSERT INTO fertilizer_applications (farm_id, field_id, crop_id, fertilizer_id, fertilizer_name, npk_ratio, application_date, area_hectares, dosage_per_ha, total_units, unit_price, total_cost, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
