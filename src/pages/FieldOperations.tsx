@@ -55,7 +55,7 @@ export default function FieldOperations() {
   const [searchQuery, setSearchQuery] = useState("")
   const [filterFarmId, setFilterFarmId] = useState("")
 
-  // WBS 4.1–4.2 Planting Batch Form
+  // Planting Batch Form
   const [plantForm, setPlantForm] = useState({
     farm_id: "",
     field_id: "",
@@ -68,7 +68,7 @@ export default function FieldOperations() {
     growth_stage: "Seedling" as GrowthStage,
   })
 
-  // WBS 4.3 Field Activity & Labor Form
+  // Field Activity & Labor Form
   const [actForm, setActForm] = useState({
     farm_id: "",
     field_id: "",
@@ -81,7 +81,7 @@ export default function FieldOperations() {
     notes: "",
   })
 
-  // WBS 4.4 Fertilizer Dosage Form
+  // Fertilizer Dosage Form
   const [fertAppForm, setFertAppForm] = useState({
     farm_id: "",
     field_id: "",
@@ -116,7 +116,6 @@ export default function FieldOperations() {
     loadAll()
   }, [])
 
-  // Auto-fill variety & expected harvest date when selecting from Master Crop Catalog
   function handleCatalogSelect(catalogId: string) {
     const item = catalog.find((c) => String(c.id) === catalogId)
     if (!item) {
@@ -238,10 +237,10 @@ export default function FieldOperations() {
             </button>
             <h1 className="text-2xl font-bold text-[#1F2922] flex items-center gap-2">
               <Sprout className="h-6 w-6 text-[#2D5A27]" />
-              Crop & Field Operations (WBS 4.0)
+              Crop & Field Operations
             </h1>
             <p className="text-sm text-[#5B6E61]">
-              Planting Batches (4.1–4.2), Labor Activity Logs (4.3), Fertilizer Dosage Calculator (4.4) & Stage Pipeline (4.5)
+              Planting Batches, Labor Activity Logs, Fertilizer Dosage Calculator & Growth Stage Pipeline
             </p>
           </div>
           <div className="flex gap-2">
@@ -275,14 +274,14 @@ export default function FieldOperations() {
           </Button>
         </div>
 
-        {/* TAB 1: WBS 4.1, 4.2 & 4.5 Planting Batches & Growth Stage Pipeline */}
+        {/* TAB 1: Planting Batches & Growth Stage Pipeline */}
         {tab === "plantings" && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <Card className="border-[#D8E2DC]">
               <CardHeader>
-                <CardTitle className="text-base">Register Planting Batch (WBS 4.1–4.2)</CardTitle>
+                <CardTitle className="text-base">Register Planting Batch</CardTitle>
                 <CardDescription className="text-xs">
-                  Assign a crop from Master Catalog to a specific farm plot
+                  Assign a crop from the Master Catalog to a specific farm plot
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -319,7 +318,7 @@ export default function FieldOperations() {
                   </div>
 
                   <div>
-                    <Label className="text-xs">Quick-Fill from Crop Catalog (WBS 2.1)</Label>
+                    <Label className="text-xs">Quick-Fill from Crop Catalog</Label>
                     <select
                       className="w-full h-9 rounded-md border border-[#D8E2DC] bg-white px-3 text-sm"
                       value={plantForm.catalog_id}
@@ -438,7 +437,7 @@ export default function FieldOperations() {
                       <th className="p-3">Batch & Crop</th>
                       <th className="p-3">Farm / Plot</th>
                       <th className="p-3">Schedule</th>
-                      <th className="p-3">Growth Stage (WBS 4.5)</th>
+                      <th className="p-3">Growth Stage</th>
                       <th className="p-3 text-right">Action</th>
                     </tr>
                   </thead>
@@ -488,12 +487,12 @@ export default function FieldOperations() {
           </div>
         )}
 
-        {/* TAB 2: WBS 4.3 Field Activity & Labor Logging */}
+        {/* TAB 2: Field Activity & Labor Logging */}
         {tab === "activities" && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <Card className="border-[#D8E2DC]">
               <CardHeader>
-                <CardTitle className="text-base">Log Field Activity & Labor (WBS 4.3)</CardTitle>
+                <CardTitle className="text-base">Log Field Activity & Labor</CardTitle>
                 <CardDescription className="text-xs">Track worker hours and field maintenance costs</CardDescription>
               </CardHeader>
               <CardContent>
@@ -633,17 +632,17 @@ export default function FieldOperations() {
           </div>
         )}
 
-        {/* TAB 3: WBS 4.4 Fertilizer Dosage & Cost Calculator */}
+        {/* TAB 3: Fertilizer Dosage & Cost Calculator */}
         {tab === "fertilizer" && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <Card className="border-[#D8E2DC]">
               <CardHeader>
                 <CardTitle className="text-base flex items-center gap-1.5">
                   <Calculator className="h-4 w-4 text-[#2D5A27]" />
-                  Fertilizer Dosage & Cost (WBS 4.4)
+                  Fertilizer Dosage & Cost
                 </CardTitle>
                 <CardDescription className="text-xs">
-                  Auto-computes total bags and input cost from Master Catalog (WBS 2.2)
+                  Auto-computes total bags and input cost from the Master Catalog
                 </CardDescription>
               </CardHeader>
               <CardContent>

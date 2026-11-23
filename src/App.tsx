@@ -5,6 +5,7 @@ import FarmManagement from "@/pages/FarmManagement"
 import FarmDetails from "@/pages/FarmDetails"
 import MasterData from "@/pages/MasterData"
 import FieldOperations from "@/pages/FieldOperations"
+import HarvestSalesReports from "@/pages/HarvestSalesReports"
 
 function App() {
   return (
@@ -16,6 +17,7 @@ function App() {
         <Route path="/farms/:farmId" element={<FarmDetails />} />
         <Route path="/master-data" element={<MasterData />} />
         <Route path="/operations" element={<FieldOperations />} />
+        <Route path="/harvest-sales" element={<HarvestSalesReports />} />
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>

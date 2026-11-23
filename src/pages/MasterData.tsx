@@ -108,7 +108,7 @@ export default function MasterData() {
               Master Reference Catalogs & Security Logs
             </h1>
             <p className="text-sm text-[#5B6E61]">
-              WBS 1.4–1.5 (RBAC & Audit Trail) and WBS 2.1–2.3 (Crop Varieties, Fertilizers & Buyers)
+              Role-Based Access Control, System Audit Trail, Crop Varieties, Fertilizers & Buyer Directory
             </p>
           </div>
           <Badge className="bg-[#2D5A27] text-white">
@@ -148,12 +148,12 @@ export default function MasterData() {
           </Button>
         </div>
 
-        {/* TAB 1: WBS 2.1 Crop Catalog */}
+        {/* TAB 1: Crop Catalog */}
         {tab === "crops" && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <Card className="border-[#D8E2DC]">
               <CardHeader>
-                <CardTitle className="text-base">Add Crop Reference (WBS 2.1)</CardTitle>
+                <CardTitle className="text-base">Add Crop Reference</CardTitle>
                 <CardDescription className="text-xs">Standardize crop varieties and maturity periods</CardDescription>
               </CardHeader>
               <CardContent>
@@ -220,12 +220,12 @@ export default function MasterData() {
           </div>
         )}
 
-        {/* TAB 2: WBS 2.2 Fertilizers */}
+        {/* TAB 2: Fertilizers */}
         {tab === "fertilizers" && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <Card className="border-[#D8E2DC]">
               <CardHeader>
-                <CardTitle className="text-base">Add Fertilizer (WBS 2.2)</CardTitle>
+                <CardTitle className="text-base">Add Fertilizer</CardTitle>
                 <CardDescription className="text-xs">N-P-K formulation and unit cost catalog</CardDescription>
               </CardHeader>
               <CardContent>
@@ -294,12 +294,12 @@ export default function MasterData() {
           </div>
         )}
 
-        {/* TAB 3: WBS 2.3 Customers */}
+        {/* TAB 3: Customers */}
         {tab === "customers" && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <Card className="border-[#D8E2DC]">
               <CardHeader>
-                <CardTitle className="text-base">Register Buyer (WBS 2.3)</CardTitle>
+                <CardTitle className="text-base">Register Buyer</CardTitle>
                 <CardDescription className="text-xs">Stakeholder and institutional buyer directory</CardDescription>
               </CardHeader>
               <CardContent>
@@ -366,13 +366,13 @@ export default function MasterData() {
           </div>
         )}
 
-        {/* TAB 4: WBS 1.4 & 1.5 RBAC & Audit Logs */}
+        {/* TAB 4: RBAC & Audit Logs */}
         {tab === "audit" && (
           <Card className="border-[#D8E2DC] overflow-hidden">
             <CardHeader className="bg-[#D8E2DC]/20 border-b border-[#D8E2DC]">
-              <CardTitle className="text-base">System Audit Trail & Activity Log (WBS 1.5)</CardTitle>
+              <CardTitle className="text-base">System Audit Trail & Activity Log</CardTitle>
               <CardDescription className="text-xs">
-                RBAC Accounts active: <strong>admin@farm.com / admin123</strong> (Full Access) and <strong>worker@farm.com / worker123</strong> (Field Staff Read/Log Access)
+                Active Role Accounts: <strong>admin@farm.com / admin123</strong> (Full Access) and <strong>worker@farm.com / worker123</strong> (Field Staff Read/Log Access)
               </CardDescription>
             </CardHeader>
             <table className="w-full text-left text-sm">

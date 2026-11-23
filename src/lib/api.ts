@@ -92,6 +92,7 @@ export interface Harvest {
 export interface Sale {
   id: number
   farm_id?: number
+  farm_name?: string
   harvest_id?: number
   crop_name: string
   buyer_name: string
@@ -175,6 +176,31 @@ export interface FertilizerApplication {
   unit_price: number
   total_cost: number
   notes?: string
+}
+
+export interface FarmFinancialRow {
+  farm_id: number
+  farm_name: string
+  location: string
+  area_hectares: number
+  harvest_kg: number
+  gross_revenue: number
+  labor_cost: number
+  fertilizer_cost: number
+  total_expense: number
+  net_profit: number
+}
+
+export interface FinancialSummary {
+  breakdown: FarmFinancialRow[]
+  totals: {
+    harvest_kg: number
+    gross_revenue: number
+    labor_cost: number
+    fertilizer_cost: number
+    total_expense: number
+    net_profit: number
+  }
 }
 
 const API_BASE = import.meta.env.VITE_API_URL || "/api"
@@ -353,7 +379,7 @@ export const api = {
     }
     await this.logAudit({
       action: "CREATE_PLANTING",
-      module: "WBS 4.1–4.2 Field Operations",
+      module: "Field Operations",
       details: `Planted ${crop.name} (${crop.variety || "Standard"}) on ${crop.area_hectares} ha`,
     })
     return await res.json()
@@ -368,7 +394,7 @@ export const api = {
     if (!res.ok) throw new Error("Failed to update growth stage")
     await this.logAudit({
       action: "UPDATE_STAGE",
-      module: "WBS 4.5 Growth Monitoring",
+      module: "Growth Monitoring",
       details: `Updated crop batch #${id} stage to ${growth_stage}`,
     })
     return await res.json()
@@ -378,7 +404,7 @@ export const api = {
     await fetch(`${API_BASE}/crops/${id}`, { method: "DELETE" })
     await this.logAudit({
       action: "DELETE_CROP",
-      module: "WBS 4.1 Crop Operations",
+      module: "Crop Operations",
       details: `Removed crop batch #${id}`,
     })
   },
@@ -389,9 +415,82 @@ export const api = {
     return await res.json()
   },
 
+  async createHarvest(item: {
+    crop_id?: number
+    crop_name: string
+    farm_id?: number
+    field_id?: number
+    farm_name?: string
+    harvest_date: string
+    quantity_kg: number
+    quality_grade?: string
+    notes?: string
+  }): Promise<Harvest> {
+    const res = await fetch(`${API_BASE}/harvests`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(item),
+    })
+    if (!res.ok) throw new Error("Failed to record harvest")
+    await this.logAudit({
+      action: "LOG_HARVEST",
+      module: "Harvest Management",
+      details: `Recorded ${item.quantity_kg} kg of ${item.crop_name} (Grade ${item.quality_grade || "A"})`,
+    })
+    return await res.json()
+  },
+
+  async deleteHarvest(id: number): Promise<void> {
+    await fetch(`${API_BASE}/harvests/${id}`, { method: "DELETE" })
+  },
+
   async getSales(): Promise<Sale[]> {
     const res = await fetch(`${API_BASE}/sales`)
     if (!res.ok) throw new Error("Failed to fetch sales")
+    return await res.json()
+  },
+
+  async createSale(item: {
+    farm_id?: number
+    harvest_id?: number
+    crop_name: string
+    buyer_name: string
+    sale_date: string
+    quantity_kg: number
+    price_per_kg: number
+    payment_status?: "paid" | "pending"
+  }): Promise<Sale> {
+    const res = await fetch(`${API_BASE}/sales`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(item),
+    })
+    if (!res.ok) throw new Error("Failed to record sale")
+    await this.logAudit({
+      action: "RECORD_SALE",
+      module: "Sales & Revenue",
+      details: `Sold ${item.quantity_kg} kg of ${item.crop_name} to ${item.buyer_name}`,
+    })
+    return await res.json()
+  },
+
+  async updateSaleStatus(id: number, payment_status: "paid" | "pending"): Promise<Sale> {
+    const res = await fetch(`${API_BASE}/sales/${id}/status`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ payment_status }),
+    })
+    if (!res.ok) throw new Error("Failed to update payment status")
+    return await res.json()
+  },
+
+  async deleteSale(id: number): Promise<void> {
+    await fetch(`${API_BASE}/sales/${id}`, { method: "DELETE" })
+  },
+
+  async getFinancialSummary(): Promise<FinancialSummary> {
+    const res = await fetch(`${API_BASE}/financial-summary`)
+    if (!res.ok) throw new Error("Failed to fetch financial summary")
     return await res.json()
   },
 
@@ -427,13 +526,13 @@ export const api = {
       body: JSON.stringify(item),
     })
     if (!res.ok) throw new Error("Failed to add crop catalog item")
-    await this.logAudit({ action: "CREATE_CROP_REF", module: "WBS 2.1 Crop Catalog", details: `Added ${item.name} (${item.variety})` })
+    await this.logAudit({ action: "CREATE_CROP_REF", module: "Crop Catalog", details: `Added ${item.name} (${item.variety})` })
     return await res.json()
   },
 
   async deleteCropCatalog(id: number): Promise<void> {
     await fetch(`${API_BASE}/crop-catalog/${id}`, { method: "DELETE" })
-    await this.logAudit({ action: "DELETE_CROP_REF", module: "WBS 2.1 Crop Catalog", details: `Removed catalog entry #${id}` })
+    await this.logAudit({ action: "DELETE_CROP_REF", module: "Crop Catalog", details: `Removed catalog entry #${id}` })
   },
 
   async getFertilizers(): Promise<FertilizerItem[]> {
@@ -449,13 +548,13 @@ export const api = {
       body: JSON.stringify(item),
     })
     if (!res.ok) throw new Error("Failed to add fertilizer")
-    await this.logAudit({ action: "CREATE_FERTILIZER", module: "WBS 2.2 Fertilizer Catalog", details: `Added ${item.name} (${item.npk_ratio})` })
+    await this.logAudit({ action: "CREATE_FERTILIZER", module: "Fertilizer Catalog", details: `Added ${item.name} (${item.npk_ratio})` })
     return await res.json()
   },
 
   async deleteFertilizer(id: number): Promise<void> {
     await fetch(`${API_BASE}/fertilizers/${id}`, { method: "DELETE" })
-    await this.logAudit({ action: "DELETE_FERTILIZER", module: "WBS 2.2 Fertilizer Catalog", details: `Removed fertilizer #${id}` })
+    await this.logAudit({ action: "DELETE_FERTILIZER", module: "Fertilizer Catalog", details: `Removed fertilizer #${id}` })
   },
 
   async getCustomers(): Promise<CustomerItem[]> {
@@ -471,13 +570,13 @@ export const api = {
       body: JSON.stringify(item),
     })
     if (!res.ok) throw new Error("Failed to add customer")
-    await this.logAudit({ action: "CREATE_CUSTOMER", module: "WBS 2.3 Stakeholder Directory", details: `Registered ${item.name}` })
+    await this.logAudit({ action: "CREATE_CUSTOMER", module: "Stakeholder Directory", details: `Registered ${item.name}` })
     return await res.json()
   },
 
   async deleteCustomer(id: number): Promise<void> {
     await fetch(`${API_BASE}/customers/${id}`, { method: "DELETE" })
-    await this.logAudit({ action: "DELETE_CUSTOMER", module: "WBS 2.3 Stakeholder Directory", details: `Removed customer #${id}` })
+    await this.logAudit({ action: "DELETE_CUSTOMER", module: "Stakeholder Directory", details: `Removed customer #${id}` })
   },
 
   async getFieldActivities(): Promise<FieldActivity[]> {
@@ -505,7 +604,7 @@ export const api = {
     if (!res.ok) throw new Error("Failed to log field activity")
     await this.logAudit({
       action: "LOG_FIELD_ACTIVITY",
-      module: "WBS 4.3 Labor & Operations",
+      module: "Labor & Operations",
       details: `${item.activity_type} by ${item.worker_name} (${item.hours_worked} hrs)`,
     })
     return await res.json()
@@ -542,7 +641,7 @@ export const api = {
     if (!res.ok) throw new Error("Failed to record fertilizer application")
     await this.logAudit({
       action: "LOG_FERTILIZER_APP",
-      module: "WBS 4.4 Fertilizer Dosage",
+      module: "Fertilizer Dosage",
       details: `Applied ${item.fertilizer_name} (${item.dosage_per_ha} bags/ha across ${item.area_hectares} ha)`,
     })
     return await res.json()

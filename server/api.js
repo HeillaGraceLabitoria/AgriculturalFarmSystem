@@ -361,7 +361,7 @@ export async function handleApiRequest(req, res) {
     return true
   }
 
-  // 5. Crops (WBS 4.1, 4.2, 4.5): GET / POST / Stage Update / Delete
+  // 5. Crops: GET / POST / Stage Update / Delete
   if (pathname === "/api/crops" && method === "GET") {
     const crops = db.prepare(`
       SELECT c.*, f.name as farm_name, ff.name as field_name
@@ -441,9 +441,14 @@ export async function handleApiRequest(req, res) {
     return true
   }
 
-  // 6. Harvests: GET /api/harvests, POST /api/harvests
+  // 6. Harvests: GET / POST (auto-updates crop batch status to harvested) / DELETE
   if (pathname === "/api/harvests" && method === "GET") {
-    const harvests = db.prepare("SELECT * FROM harvests ORDER BY harvest_date DESC").all()
+    const harvests = db.prepare(`
+      SELECT h.*, ff.name as field_name
+      FROM harvests h
+      LEFT JOIN farm_fields ff ON h.field_id = ff.id
+      ORDER BY h.harvest_date DESC, h.id DESC
+    `).all()
     sendJson(res, 200, harvests)
     return true
   }
@@ -454,6 +459,13 @@ export async function handleApiRequest(req, res) {
       sendJson(res, 400, { error: "Crop name, harvest date, and quantity are required" })
       return true
     }
+
+    let resolvedFarmName = farm_name || "General Farm"
+    if (farm_id) {
+      const f = db.prepare("SELECT name FROM farms WHERE id = ?").get(Number(farm_id))
+      if (f) resolvedFarmName = f.name
+    }
+
     const result = db.prepare(`
       INSERT INTO harvests (crop_id, crop_name, farm_id, field_id, farm_name, harvest_date, quantity_kg, quality_grade, notes)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -462,20 +474,37 @@ export async function handleApiRequest(req, res) {
       crop_name,
       farm_id ? Number(farm_id) : null,
       field_id ? Number(field_id) : null,
-      farm_name || "General Farm",
+      resolvedFarmName,
       harvest_date,
       Number(quantity_kg),
       quality_grade || "A",
       notes || null
     )
+
+    if (crop_id) {
+      db.prepare("UPDATE crops SET status = 'harvested', growth_stage = 'Harvested' WHERE id = ?").run(Number(crop_id))
+    }
+
     const newHarvest = db.prepare("SELECT * FROM harvests WHERE id = ?").get(result.lastInsertRowid)
     sendJson(res, 201, newHarvest)
     return true
   }
 
-  // 7. Sales: GET /api/sales, POST /api/sales
+  const harvestIdMatch = pathname.match(/^\/api\/harvests\/(\d+)$/)
+  if (harvestIdMatch && method === "DELETE") {
+    db.prepare("DELETE FROM harvests WHERE id = ?").run(Number(harvestIdMatch[1]))
+    sendJson(res, 200, { success: true })
+    return true
+  }
+
+  // 7. Sales: GET / POST / PUT (payment status) / DELETE
   if (pathname === "/api/sales" && method === "GET") {
-    const sales = db.prepare("SELECT * FROM sales ORDER BY sale_date DESC").all()
+    const sales = db.prepare(`
+      SELECT s.*, f.name as farm_name
+      FROM sales s
+      LEFT JOIN farms f ON s.farm_id = f.id
+      ORDER BY s.sale_date DESC, s.id DESC
+    `).all()
     sendJson(res, 200, sales)
     return true
   }
@@ -488,7 +517,7 @@ export async function handleApiRequest(req, res) {
     }
     const qty = Number(quantity_kg)
     const price = Number(price_per_kg)
-    const total = qty * price
+    const total = Number((qty * price).toFixed(2))
 
     const result = db.prepare(`
       INSERT INTO sales (farm_id, harvest_id, crop_name, buyer_name, sale_date, quantity_kg, price_per_kg, total_amount, payment_status)
@@ -510,7 +539,23 @@ export async function handleApiRequest(req, res) {
     return true
   }
 
-  // 8. WBS 1.5: Audit Logs (GET / POST)
+  const saleStatusMatch = pathname.match(/^\/api\/sales\/(\d+)\/status$/)
+  if (saleStatusMatch && method === "PUT") {
+    const saleId = Number(saleStatusMatch[1])
+    const { payment_status } = await parseJsonBody(req)
+    db.prepare("UPDATE sales SET payment_status = ? WHERE id = ?").run(payment_status || "paid", saleId)
+    sendJson(res, 200, db.prepare("SELECT * FROM sales WHERE id = ?").get(saleId))
+    return true
+  }
+
+  const saleIdMatch = pathname.match(/^\/api\/sales\/(\d+)$/)
+  if (saleIdMatch && method === "DELETE") {
+    db.prepare("DELETE FROM sales WHERE id = ?").run(Number(saleIdMatch[1]))
+    sendJson(res, 200, { success: true })
+    return true
+  }
+
+  // 8. Audit Logs (GET / POST)
   if (pathname === "/api/audit-logs" && method === "GET") {
     const logs = db.prepare("SELECT * FROM audit_logs ORDER BY id DESC LIMIT 100").all()
     sendJson(res, 200, logs)
@@ -527,7 +572,7 @@ export async function handleApiRequest(req, res) {
     return true
   }
 
-  // 9. WBS 2.1: Crop Catalog (GET / POST / DELETE)
+  // 9. Crop Catalog (GET / POST / DELETE)
   if (pathname === "/api/crop-catalog" && method === "GET") {
     sendJson(res, 200, db.prepare("SELECT * FROM crop_catalog ORDER BY name ASC").all())
     return true
@@ -553,7 +598,7 @@ export async function handleApiRequest(req, res) {
     return true
   }
 
-  // 10. WBS 2.2: Fertilizers Master List (GET / POST / DELETE)
+  // 10. Fertilizers Master List (GET / POST / DELETE)
   if (pathname === "/api/fertilizers" && method === "GET") {
     sendJson(res, 200, db.prepare("SELECT * FROM fertilizers ORDER BY name ASC").all())
     return true
@@ -579,7 +624,7 @@ export async function handleApiRequest(req, res) {
     return true
   }
 
-  // 11. WBS 2.3: Customers & Stakeholders Directory (GET / POST / DELETE)
+  // 11. Customers & Stakeholders Directory (GET / POST / DELETE)
   if (pathname === "/api/customers" && method === "GET") {
     sendJson(res, 200, db.prepare("SELECT * FROM customers ORDER BY name ASC").all())
     return true
@@ -605,7 +650,7 @@ export async function handleApiRequest(req, res) {
     return true
   }
 
-  // 12. WBS 4.3: Field Activities & Labor Logs (GET / POST / DELETE)
+  // 12. Field Activities & Labor Logs (GET / POST / DELETE)
   if (pathname === "/api/field-activities" && method === "GET") {
     const rows = db.prepare(`
       SELECT fa.*, f.name as farm_name, ff.name as field_name, c.name as crop_name
@@ -650,7 +695,7 @@ export async function handleApiRequest(req, res) {
     return true
   }
 
-  // 13. WBS 4.4: Fertilizer Applications & Dosage Calculator (GET / POST / DELETE)
+  // 13. Fertilizer Applications & Dosage Calculator (GET / POST / DELETE)
   if (pathname === "/api/fertilizer-applications" && method === "GET") {
     const rows = db.prepare(`
       SELECT fa.*, f.name as farm_name, ff.name as field_name, c.name as crop_name
@@ -718,6 +763,55 @@ export async function handleApiRequest(req, res) {
   if (fertAppMatch && method === "DELETE") {
     db.prepare("DELETE FROM fertilizer_applications WHERE id = ?").run(Number(fertAppMatch[1]))
     sendJson(res, 200, { success: true })
+    return true
+  }
+
+  // 14. Financial Summary & Net Profit Analytics per Farm
+  if (pathname === "/api/financial-summary" && method === "GET") {
+    const farms = db.prepare("SELECT id, name, location, size_hectares FROM farms ORDER BY id ASC").all()
+    const breakdown = farms.map((farm) => {
+      const revenue = db
+        .prepare("SELECT COALESCE(SUM(total_amount), 0) as total FROM sales WHERE farm_id = ?")
+        .get(farm.id).total
+      const laborCost = db
+        .prepare("SELECT COALESCE(SUM(labor_cost), 0) as total FROM field_activities WHERE farm_id = ?")
+        .get(farm.id).total
+      const fertilizerCost = db
+        .prepare("SELECT COALESCE(SUM(total_cost), 0) as total FROM fertilizer_applications WHERE farm_id = ?")
+        .get(farm.id).total
+      const harvestKg = db
+        .prepare("SELECT COALESCE(SUM(quantity_kg), 0) as total FROM harvests WHERE farm_id = ?")
+        .get(farm.id).total
+      const totalExpense = Number(laborCost) + Number(fertilizerCost)
+      const netProfit = Number(revenue) - totalExpense
+
+      return {
+        farm_id: farm.id,
+        farm_name: farm.name,
+        location: farm.location,
+        area_hectares: farm.size_hectares,
+        harvest_kg: Number(harvestKg),
+        gross_revenue: Number(revenue),
+        labor_cost: Number(laborCost),
+        fertilizer_cost: Number(fertilizerCost),
+        total_expense: totalExpense,
+        net_profit: netProfit,
+      }
+    })
+
+    const totals = breakdown.reduce(
+      (acc, row) => ({
+        harvest_kg: acc.harvest_kg + row.harvest_kg,
+        gross_revenue: acc.gross_revenue + row.gross_revenue,
+        labor_cost: acc.labor_cost + row.labor_cost,
+        fertilizer_cost: acc.fertilizer_cost + row.fertilizer_cost,
+        total_expense: acc.total_expense + row.total_expense,
+        net_profit: acc.net_profit + row.net_profit,
+      }),
+      { harvest_kg: 0, gross_revenue: 0, labor_cost: 0, fertilizer_cost: 0, total_expense: 0, net_profit: 0 }
+    )
+
+    sendJson(res, 200, { breakdown, totals })
     return true
   }
 
